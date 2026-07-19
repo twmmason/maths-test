@@ -94,7 +94,10 @@ function FlyingRocket({
       if (group.current) group.current.position.y = 0;
       return;
     }
-    const warp = warpFor(clockRef.current.altKm);
+    // Time-warp drops to REAL TIME just before and after a catastrophe so the
+    // explosion always plays at normal speed, never fast-forwarded.
+    const nearBoom = !!catastrophe && clockRef.current.t >= catastrophe.t - 1.5;
+    const warp = exploded || nearBoom ? 1 : warpFor(clockRef.current.altKm);
     clockRef.current.warp = warp;
     clockRef.current.t = Math.min(clockRef.current.t + dt * warp, flight.samples[flight.samples.length - 1]?.t ?? flight.apogeeT);
     const t = clockRef.current.t;
@@ -446,7 +449,9 @@ export default function LaunchPage() {
       return;
     }
     sfx.countdown(count);
-    const id = setTimeout(() => setCount((c) => c - 1), 1000);
+    // 1.4 s cadence: each spoken digit fully lands before the next appears
+    // (the voice also hard-interrupts, so digits can never overlap/drift).
+    const id = setTimeout(() => setCount((c) => c - 1), 1400);
     return () => clearTimeout(id);
   }, [phase, count]);
 

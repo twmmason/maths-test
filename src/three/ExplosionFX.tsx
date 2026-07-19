@@ -57,7 +57,7 @@ const triCentroid = (pos: THREE.BufferAttribute | THREE.InterleavedBufferAttribu
  * local space). Call at the moment of the catastrophe, BEFORE unmounting the
  * rocket, then hand the result to <ExplosionFX shards={...}>.
  */
-export function shatterObject(root: THREE.Object3D, maxShards = 64): Shard[] {
+export function shatterObject(root: THREE.Object3D, maxShards = 96): Shard[] {
   root.updateWorldMatrix(true, true);
   const rootInv = new THREE.Matrix4().copy(root.matrixWorld).invert();
   const meshes: THREE.Mesh[] = [];
@@ -404,17 +404,25 @@ export function ExplosionFX({
 
     // REAL shards: ballistic arcs + tumble + shrinking flame trails.
     if (shardGroup.current) {
+      // Aerodynamic drag: shards decelerate (exponential velocity decay)
+      // instead of sailing off at constant speed — reads far more physical.
+      const travel = (1 - Math.exp(-age * 0.55)) / 0.55;
+      const spinDamp = Math.exp(-age * 0.3);
       shardGroup.current.children.forEach((c, i) => {
         const k = shards[i];
         if (!k) return;
         const g = c as THREE.Group;
         g.position.set(
-          k.position.x + k.dir.x * k.speed * age,
-          k.position.y + k.dir.y * k.speed * age - 2.2 * age * age,
-          k.position.z + k.dir.z * k.speed * age,
+          k.position.x + k.dir.x * k.speed * travel,
+          k.position.y + k.dir.y * k.speed * travel - 2.2 * age * age,
+          k.position.z + k.dir.z * k.speed * travel,
         );
-        g.rotation.x += 0.016 * k.spinX;
-        g.rotation.z += 0.016 * k.spinZ;
+        g.rotation.x += 0.016 * k.spinX * spinDamp;
+        g.rotation.z += 0.016 * k.spinZ * spinDamp;
+        // Embers cool: the orange glow on each fragment fades over ~3 s.
+        const body = g.children[0] as THREE.Mesh | undefined;
+        const std = body?.material as THREE.MeshStandardMaterial | undefined;
+        if (std?.isMeshStandardMaterial) std.emissiveIntensity = (k.burns ? 1.8 : 0.3) * Math.max(0, 1 - age / 3);
         const trail = g.children[1] as THREE.Mesh | undefined;
         if (trail) {
           const burn = k.burns ? Math.max(0, 1 - age / 2.6) : 0;

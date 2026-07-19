@@ -77,10 +77,10 @@ function Part({ part, draft, selected, level = 1, interactive, onSelect, childre
       metalness={mat.metalness}
       normalMap={panelNormalMap}
       normalScale={new THREE.Vector2(0.35, 0.35)}
-      envMapIntensity={0.9}
-      clearcoat={isTransparent ? 0 : 0.7}
-      clearcoatRoughness={0.1}
-      reflectivity={0.9}
+      envMapIntensity={1.5}
+      clearcoat={isTransparent ? 0 : 1}
+      clearcoatRoughness={0.06}
+      reflectivity={1}
       ior={1.5}
       transparent={isTransparent}
       opacity={draft ? 0.28 : base.opacity ?? 1}
@@ -233,10 +233,10 @@ export default function Rocket3D({
                   <meshStandardMaterial color="#334155" metalness={0.8} roughness={0.35} />
                 </mesh>
               ))}
-              {/* recessed dark access panel (curved segment, faces the camera side) */}
+              {/* recessed dark-grey access panel (curved segment) */}
               <mesh rotation={[0, Math.PI / 2 - 0.55, 0]}>
                 <cylinderGeometry args={[r * 1.05, r * 1.05, 0.4, 10, 1, true, 0, 1.1]} />
-                <meshStandardMaterial color="#0f172a" metalness={0.6} roughness={0.4} />
+                <meshStandardMaterial color="#565f6e" metalness={0.65} roughness={0.35} />
               </mesh>
               {/* status LEDs following the hull curve */}
               {Array.from({ length: 6 }).map((_, i) => {

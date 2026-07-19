@@ -20,7 +20,7 @@ export const PART_MATERIALS: Record<RocketPart, { color: string; roughness: numb
   engine: { color: "#1e2028", roughness: 0.2, metalness: 0.85 },      // dark polished engine bell
   fins: { color: "#2e3340", roughness: 0.22, metalness: 0.65 },       // titanium grid fins
   payloadBay: { color: "#c8cdd6", roughness: 0.2, metalness: 0.4 },   // light grey payload adapter
-  electronics: { color: "#1a2030", roughness: 0.25, metalness: 0.6 }, // black avionics band
+  electronics: { color: "#4b5563", roughness: 0.3, metalness: 0.65 }, // dark-grey avionics band
   booster: { color: "#e8eaed", roughness: 0.2, metalness: 0.4 },      // white side boosters
 };
 
