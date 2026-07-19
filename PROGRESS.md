@@ -128,3 +128,41 @@ apogee events) → **"Low Orbit reached! 157.1 km · target 100 km · 13/13
 tasks"** → After-action report rendered altitude-vs-time replay with target
 line and the per-part criterion breakdown → Flight Log coverage map showed
 attempted criteria highlighted and First Launch + Flawless Flight patches earned.
+
+## KS3 "Astronaut Academy" Expansion (PROMPT_KS3.md)
+
+### Phase 8: Curriculum data + coverage tooling   Status: ✅ COMPLETE (2026-07-19)
+- [x] `keyStage` on every criterion; 65 KS3 criteria coded per the PDF (KS3N 16 · KS3A 16 · KS3R 10 · KS3G 16 · KS3P 4 · KS3S 3) — `src/curriculum/ks3.ts`
+- [x] `scripts/coverage-check.ts` + templates test enlarged to the full 146 with per-keystage output (`KS2 81/81 ✅  KS3 65/65 ✅`)
+- [x] /dev/status grid enlarged: strands + KS3 domains × years 1–9
+
+### Phase 9: Widgets   Status: ✅ COMPLETE (2026-07-19)
+- [x] 10 new widgets registered in TaskRenderer: Equation, GraphPlot (4-quadrant lines/quadratics/intersections/piecewise/exponential/reciprocal, plotPoint click, matchLine m/c sliders), Sequence, StandardForm (A × 10^n builder), Construction, Triangle, Venn, SampleSpace, Chart (bar/pie/scatter), ScaleMap
+- [x] Equation-display rule enforced: notation only inside widget canvases, briefings symbol-free (tested across all 146 × 3 tiers × 4 seeds)
+
+### Phase 10: Templates per domain   Status: ✅ COMPLETE (2026-07-19)
+- [x] ks3-number (Propellant Chemistry Lab), ks3-algebra (Flight Computer), ks3-ratio (Mission Planning Office) — completed from the in-progress work
+- [x] ks3-geometry (Structures & Trajectory Bay), ks3-probability (Mission Risk Console), ks3-statistics (Telemetry Science Deck) — written new
+- [x] All wired into the engine dispatcher; 471 tests green
+
+### Phase 11: Academy progression + destinations   Status: ✅ COMPLETE (2026-07-19)
+- [x] Academy unlock: 60% KS2 mastery OR "I'm in Year 7+" toggle (`isAcademyUnlocked`); `academyUnlocked` on Profile with Dexie v3 migration; picker checkbox
+- [x] 4 Academy destinations (Jupiter's Moons, Saturn's Rings, Interstellar Probe, Generation Ship) gated on KS3 mastery, 🎓 tags + lock hints in the Hangar
+- [x] Planner never mixes key stages within a part: `partKeyStage` picks a KS2 or KS3 fit-out from unlock + due reviews; Academy destinations always fly KS3
+- [x] Academy patches (Academy Cadet, destination set, 6 KS3 domain-mastery patches incl. Algebra Ace / Risk Analyst / Data Scientist / Pythagoras Prize)
+- [x] Flight Log coverage map: stacked KS2 (81) + 🎓 KS3 (65) sections
+
+### Phase 12: takram + Google 3D Tiles   Status: ✅ COMPLETE (2026-07-19)
+- [x] Sanctioned stack upgrade: React 19 · R3F v9 · drei 10 · three 0.185 · postprocessing (verify stayed green)
+- [x] `src/three/GeoEnvironment.tsx` (Gaudi pattern): ECEF rebase at the site's lat/lon, takram Sky/Stars/SunLight/SkyLight, volumetric Clouds, AerialPerspective + LensFlare + Bloom + AGX tone mapping, Google Photorealistic 3D Tiles (key-validated, relit, pad-cleared, error-boundary + retry)
+- [x] Wired through RocketScene for every 3D view; stylised terrain remains the offline error path
+- Verified in browser: real Cape Canaveral coastline + cloud deck visible from the Hangar, VAB and launch pad
+
+### Phase 13: Cinematic launch + polish   Status: ✅ COMPLETE (2026-07-19)
+- [x] Launch director (§6a-ii): pad cam → tower cam → ground tracking telephoto (fov tightens) → chase cam → orbit reveal, cuts driven by the rocket's ACTUAL simulated altitude; damped moves, T-0 shake; "📺 shot — switch" manual cycle; reduced-motion single tracking shot
+- [x] OrbitControls handed over to the director during flight; restored after
+- Verified in browser: full launch from real Canaveral terrain, auto shots cycling to Orbit Cam at 259 km
+
+### Verification log (expansion)
+- 2026-07-19 `pnpm verify`: tsc clean · **471/471 tests** · `KS2 81/81 ✅  KS3 65/65 ✅` · 146/146 covered
+- 2026-07-19 browser walkthrough: Year 7+ toggle on the picker → Jupiter's Moons open at 0% KS2 (🎓 Academy tag), Saturn/Interstellar/Generation Ship gated on KS3 %; real 3D Tiles + takram sky in Hangar/VAB/Launch; cinematic launch tracked pad → orbit with auto shot cycling
