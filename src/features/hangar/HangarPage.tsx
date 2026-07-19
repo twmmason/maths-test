@@ -7,7 +7,7 @@ import { DESTINATIONS } from "../../mission/destinations";
 import { SITE_BY_ID } from "../../mission/launchSites";
 import { PATCH_BY_ID } from "../../mission/patches";
 import SitePicker from "./SitePicker";
-import ViewSwitcher, { type ViewSwitcherHandle } from "../../components/ViewSwitcher";
+import MissionCamera from "../../components/MissionCamera";
 import TimeOfDaySlider from "../../components/TimeOfDaySlider";
 
 export default function HangarPage() {
@@ -22,10 +22,6 @@ export default function HangarPage() {
   const academyOpen = useRocketState((s) => s.academyOpen);
   const [showSites, setShowSites] = useState(false);
   const [photoMode, setPhotoMode] = useState(false);
-  const [photoOverlay, setPhotoOverlay] = useState<string | null>(null);
-  const [photoBusy, setPhotoBusy] = useState(false);
-  const lastPhotoMode = useRef<"fast" | "quality" | null>(null);
-  const viewSwitcherRef = useRef<{ recapture: () => void } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // First visit: pick the launch site.
@@ -40,34 +36,7 @@ export default function HangarPage() {
 
   return (
     <div className="relative h-full">
-      <div
-        className="absolute inset-0"
-        onPointerDown={() => {
-          if (photoOverlay && photoMode) {
-            // User started dragging the 3D scene — dismiss photo instantly
-            setPhotoOverlay(null);
-          }
-        }}
-        onWheel={() => {
-          if (photoOverlay && photoMode) {
-            setPhotoOverlay(null);
-            // Re-render after zoom settles
-            if (lastPhotoMode.current && !photoBusy) {
-              setTimeout(() => {
-                setPhotoBusy(true);
-                setTimeout(() => viewSwitcherRef.current?.recapture(), 400);
-              }, 600);
-            }
-          }
-        }}
-        onPointerUp={() => {
-          if (!photoOverlay && photoMode && lastPhotoMode.current && !photoBusy) {
-            // User finished dragging — re-capture from the new angle after a brief settle
-            setPhotoBusy(true);
-            setTimeout(() => viewSwitcherRef.current?.recapture(), 400);
-          }
-        }}
-      >
+      <div className="absolute inset-0">
         <RocketScene site={site} autoRotate={!photoMode} onCanvasReady={(c) => (canvasRef.current = c)}>
           <Rocket3D design={design} complete partLevels={profile?.partLevels} />
         </RocketScene>
@@ -148,46 +117,18 @@ export default function HangarPage() {
         </div>
       </div>
 
-      {/* Photo overlay — full-screen over the canvas */}
-      {photoBusy && (
-        <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
-          <div className="hud-panel px-4 py-2 text-sm text-cyan-200 animate-pulse">developing photo… 📷</div>
-        </div>
-      )}
-      {photoOverlay && photoMode && !photoBusy && (
-        <div className="absolute inset-0 z-20 pointer-events-none">
-          <img src={photoOverlay} alt="Mission photo" className="w-full h-full object-cover" />
-        </div>
-      )}
-
       {/* Time of day */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30">
         <TimeOfDaySlider />
       </div>
 
-      {/* Mission camera pill */}
-      <div className="absolute bottom-4 right-4 z-30">
-        <ViewSwitcher
-          ref={viewSwitcherRef}
-          getCanvas={() => canvasRef.current}
-          siteName={site.name}
-          siteTerrain={site.terrain}
-          onModeChange={(m) => {
-            setPhotoMode(m !== "cad");
-            if (m === "cad") {
-              setPhotoOverlay(null);
-              lastPhotoMode.current = null;
-            } else {
-              setPhotoBusy(true);
-              lastPhotoMode.current = m as "fast" | "quality";
-            }
-          }}
-          onPhoto={(url) => {
-            setPhotoOverlay(url);
-            setPhotoBusy(false);
-          }}
-        />
-      </div>
+      {/* Mission camera pill + photo overlay */}
+      <MissionCamera
+        getCanvas={() => canvasRef.current}
+        siteName={site.name}
+        siteTerrain={site.terrain}
+        onPhotoModeChange={setPhotoMode}
+      />
 
       {showSites && <SitePicker onClose={() => setShowSites(false)} />}
     </div>

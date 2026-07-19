@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import RocketScene from "../../three/RocketScene";
 import Rocket3D from "../../three/Rocket3D";
+import MissionCamera from "../../components/MissionCamera";
 import PerformancePanel from "../../components/PerformancePanel";
 import TuningPanel, { TUNING_BY_PART } from "../vab/TuningPanel";
 import { useRocketState } from "../../mission/useRocketState";
@@ -26,6 +27,7 @@ export default function SandboxPage() {
   });
   const site = SITE_BY_ID[profile?.launchSiteId ?? "canaveral"];
   const [openPart, setOpenPart] = useState<RocketPart>("engine");
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Deterministic: same dial settings ⇒ same predicted flight, every time.
   const flight = useMemo(() => simulateFlight(design, 1), [design]);
 
@@ -34,9 +36,15 @@ export default function SandboxPage() {
   return (
     <div className="h-full flex gap-3 p-3">
       <div className="relative flex-1 rounded-2xl overflow-hidden border border-cyan-500/20 min-w-0">
-        <RocketScene site={site}>
+        <RocketScene site={site} onCanvasReady={(c) => (canvasRef.current = c)}>
           <Rocket3D design={design} complete partLevels={profile?.partLevels} />
         </RocketScene>
+        <MissionCamera
+          getCanvas={() => canvasRef.current}
+          siteName={site.name}
+          siteTerrain={site.terrain}
+          pillClassName="absolute bottom-3 right-3 z-30"
+        />
         <div className="absolute top-3 left-3 hud-panel px-3 py-1.5 text-xs">🧪 Sandbox — free tuning, instant physics, no marks</div>
         <div className="absolute top-3 right-3">
           <button className="btn-ghost !px-3 !py-1 text-xs" onClick={() => navigate("/")}>← Hangar</button>

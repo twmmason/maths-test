@@ -12,6 +12,7 @@ import { recordMission } from "../../mission/recordMission";
 import { sfx } from "../../mission/sound";
 import { ExplosionFX, shatterObject, type Shard } from "../../three/ExplosionFX";
 import TimeOfDaySlider from "../../components/TimeOfDaySlider";
+import MissionCamera from "../../components/MissionCamera";
 import { useEffect as useEffectOnce } from "react";
 import type { FlightResult } from "../../physics/types";
 import type { RocketDesign } from "../../three/rocketDesign";
@@ -36,6 +37,7 @@ function FlyingRocket({
   design,
   flight,
   playing,
+  paused = false,
   clockRef,
   partLevels,
   orbit = false,
@@ -44,6 +46,8 @@ function FlyingRocket({
   design: RocketDesign;
   flight: FlightResult;
   playing: boolean;
+  /** Photo/poster mode: freeze the sim clock so time stands still mid-shot. */
+  paused?: boolean;
   clockRef: React.MutableRefObject<{ t: number; altKm: number; y: number; x?: number; z?: number; warp?: number }>;
   partLevels?: Partial<Record<RocketPart, 1 | 2 | 3>>;
   /** After a successful orbital flight: coast the rocket up to REAL altitude
@@ -64,6 +68,8 @@ function FlyingRocket({
   const orbitStartY = useRef<number | null>(null);
 
   useFrame((state, dt) => {
+    // Photo/poster mode: hold everything exactly where it is.
+    if (paused) return;
     // Orbit coast: ease from the ascent's last height up to true altitude
     // (metres) inside the one world scene — sky fades to black, the limb
     // appears, all from the same atmosphere.
@@ -361,6 +367,8 @@ export default function LaunchPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const clockRef = useRef<{ t: number; altKm: number; y: number; x?: number; z?: number; warp?: number }>({ t: 0, altKm: 0, y: 0 });
   const [destruct, setDestruct] = useState<{ t: number; altKm: number } | null>(null);
+  const [photoPaused, setPhotoPaused] = useState(false);
+  const photoPausedRef = useRef(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const savedRef = useRef(false);
 
@@ -438,9 +446,9 @@ export default function LaunchPage() {
     setTimeout(() => setCaption(null), 5000);
   };
 
-  // Countdown
+  // Countdown (holds while the mission camera has time paused)
   useEffect(() => {
-    if (phase !== "countdown") return;
+    if (phase !== "countdown" || photoPaused) return;
     if (count <= 0) {
       sfx.launch();
     // Cheers shortly after liftoff
@@ -453,7 +461,7 @@ export default function LaunchPage() {
     // (the voice also hard-interrupts, so digits can never overlap/drift).
     const id = setTimeout(() => setCount((c) => c - 1), 1400);
     return () => clearTimeout(id);
-  }, [phase, count]);
+  }, [phase, count, photoPaused]);
 
   // Failure captions + explosion audio, driven off the deterministic event list.
   useEffect(() => {
@@ -527,6 +535,7 @@ export default function LaunchPage() {
       setAltReadout(clockRef.current.altKm);
       setTPlus(clockRef.current.t);
       setWarpReadout(clockRef.current.warp ?? 1);
+      if (photoPausedRef.current) return; // time is paused for a photo
       if (!finishing && (clockRef.current.t >= endT - 0.01 || Date.now() - started > 60_000)) {
         finishing = true;
         setTimeout(() => void finishFlight(), 1500);
@@ -591,6 +600,7 @@ export default function LaunchPage() {
             design={design}
             flight={flight}
             playing={phase === "flight" || phase === "done"}
+            paused={photoPaused}
             clockRef={clockRef}
             partLevels={profile?.partLevels}
             orbit={orbitView}
@@ -605,6 +615,18 @@ export default function LaunchPage() {
           <OrbitRevealCam clockRef={clockRef} active={orbitView && !userCam} />
         </RocketScene>
       </div>
+
+      {/* Mission camera pill + photo overlay (time pauses in photo/poster) */}
+      <MissionCamera
+        getCanvas={() => canvasRef.current}
+        siteName={site.name}
+        siteTerrain={site.terrain}
+        pillClassName="absolute bottom-20 right-4 z-30"
+        onPhotoModeChange={(active) => {
+          setPhotoPaused(active);
+          photoPausedRef.current = active;
+        }}
+      />
 
       {/* HUD */}
       <div className="absolute top-4 left-4 hud-panel px-4 py-2 text-sm z-10">

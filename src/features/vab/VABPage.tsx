@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import RocketScene from "../../three/RocketScene";
 import Rocket3D, { focusHeightFor } from "../../three/Rocket3D";
@@ -6,6 +6,7 @@ import PartsTray from "./PartsTray";
 import StagePanel from "./StagePanel";
 import InstallSequence from "./InstallSequence";
 import TuningPanel from "./TuningPanel";
+import MissionCamera from "../../components/MissionCamera";
 import PerformancePanel from "../../components/PerformancePanel";
 import MissionTargetsPanel from "../../components/MissionTargetsPanel";
 import TaskRenderer from "../../components/TaskRenderer";
@@ -32,6 +33,7 @@ export default function VABPage() {
   const adjustSpareParts = useRocketState((s) => s.adjustSpareParts);
   const resetBuild = useRocketState((s) => s.resetBuild);
   const [preflight, setPreflight] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const site = SITE_BY_ID[profile?.launchSiteId ?? "canaveral"];
   const dest = DESTINATION_BY_ID[destinationId];
@@ -52,7 +54,11 @@ export default function VABPage() {
       {/* 3D viewport + certification board */}
       <div className="flex-1 flex flex-col gap-3 min-w-0">
         <div className="relative flex-1 rounded-2xl overflow-hidden border border-cyan-500/20">
-          <RocketScene site={site} focusY={selectedPart ? focusHeightFor(selectedPart, design) : null}>
+          <RocketScene
+            site={site}
+            focusY={selectedPart ? focusHeightFor(selectedPart, design) : null}
+            onCanvasReady={(c) => (canvasRef.current = c)}
+          >
             <Rocket3D
               design={design}
               interactive
@@ -75,6 +81,12 @@ export default function VABPage() {
               🧹 Clear build
             </button>
           </div>
+          <MissionCamera
+            getCanvas={() => canvasRef.current}
+            siteName={site.name}
+            siteTerrain={site.terrain}
+            pillClassName="absolute bottom-3 right-3 z-30"
+          />
         </div>
 
         {/* Certification board */}
@@ -137,14 +149,25 @@ export default function VABPage() {
         {profile && (
           <MissionTargetsPanel profileId={profile.id} destinationId={destinationId} design={design} mode="next" />
         )}
-        {selectedPart && design.installedParts[selectedPart]?.certified && (
-          <TuningPanel
-            part={selectedPart}
-            design={design}
-            onChange={(patch) => updateDesign(patch)}
-            spareParts={profile?.spareParts ?? 0}
-            onSpendToken={() => void adjustSpareParts(-1)}
-          />
+        {selectedPart && design.installedParts[selectedPart] && (
+          <>
+            {!design.installedParts[selectedPart]?.certified && (
+              <div className="hud-panel px-3 py-2 text-xs text-amber-300">
+                🔧 {selectedPart} is installed but not certified yet —{" "}
+                <button className="underline text-amber-200" onClick={() => setInstallingPart(selectedPart)}>
+                  finish Wrench Time
+                </button>{" "}
+                to certify it.
+              </div>
+            )}
+            <TuningPanel
+              part={selectedPart}
+              design={design}
+              onChange={(patch) => updateDesign(patch)}
+              spareParts={profile?.spareParts ?? 0}
+              onSpendToken={() => void adjustSpareParts(-1)}
+            />
+          </>
         )}
         <StagePanel />
         {!perf.flightReady && attached.length > 0 && (
