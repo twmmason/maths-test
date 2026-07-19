@@ -104,12 +104,13 @@ export const PART_STRANDS: Record<RocketPart, Strand[]> = {
   booster: ["NF", "MD"],
 };
 
-/** Part level from strand mastery: 5+ mastered → Lv3, 2+ → Lv2, else Lv1. */
+/** Part level from strand mastery: 3+ mastered → Lv3, 1+ → Lv2, else Lv1.
+ *  Thresholds are low so a child sees upgrades after their first couple of missions. */
 export function partLevel(part: RocketPart, mastery: Map<string, CriterionMastery>): 1 | 2 | 3 {
   const counts = strandMasteryCounts(mastery);
   const total = PART_STRANDS[part].reduce((s, strand) => s + counts[strand], 0);
-  if (total >= 5) return 3;
-  if (total >= 2) return 2;
+  if (total >= 3) return 3;
+  if (total >= 1) return 2;
   return 1;
 }
 
