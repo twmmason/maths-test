@@ -15,7 +15,12 @@ export default function PartsTray() {
   const detachPart = useRocketState((s) => s.detachPart);
 
   const installed = design.installedParts[tab];
-  const level = profile?.partLevels[tab] ?? 1;
+  // Compute live part level from attempts (not the stale profile.partLevels)
+  const level = useRocketState((s) => {
+    // This updates after refreshMastery runs
+    const stored = s.profile?.partLevels[tab] ?? 1;
+    return stored;
+  });
   const radialCategory = tab === "fins" || tab === "booster";
 
   return (

@@ -3,7 +3,7 @@ import type { RocketPart } from "../curriculum/types";
 import { emptyDesign, type RocketDesign } from "../three/rocketDesign";
 import { db, attemptsFor, type Profile, type Attempt } from "../db/db";
 import { loadActiveProfile, getActiveProfileId, clearActiveProfileId } from "../db/seed";
-import { xpForAttempt, computeMastery, masteryPercent, isAcademyUnlocked } from "../engine/mastery";
+import { xpForAttempt, computeMastery, masteryPercent, isAcademyUnlocked, allPartLevels } from "../engine/mastery";
 import { planPart, type PartPlan } from "./runPlanner";
 import { VARIANT_BY_ID, type PartVariant } from "./partsCatalog";
 import type { FlightResult } from "../physics/types";
@@ -202,6 +202,17 @@ export const useRocketState = create<RocketState>((set, get) => ({
       const updated = { ...profile, xp, lastPlayedAt: Date.now() };
       await db.profiles.put(updated);
       set({ profile: updated });
+    }
+    // Refresh mastery + part levels so upgrades appear immediately
+    {
+      const p = get().profile;
+      if (p) {
+        const atts = await attemptsFor(p.id);
+        const levels = allPartLevels(computeMastery(atts));
+        const updated = { ...p, partLevels: levels };
+        await db.profiles.put(updated);
+        set({ profile: updated });
+      }
     }
     await get().refreshMastery();
   },
