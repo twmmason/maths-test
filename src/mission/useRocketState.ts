@@ -53,6 +53,8 @@ export interface RocketState {
   setLastFlight: (f: (FlightResult & { screenshot?: string }) | null) => void;
   setLastMission: (id: number | null, patches: string[]) => void;
   resetBuild: () => Promise<void>;
+  /** Debug mode: instantly certify every attached part (skips Wrench Time). */
+  debugCertifyAll: () => Promise<void>;
   /** Called once a commander has been picked/created — loads their world. */
   activateProfile: (profile: Profile) => Promise<void>;
   /** Log out to the commander picker. */
@@ -309,6 +311,18 @@ export const useRocketState = create<RocketState>((set, get) => ({
 
   setLastFlight: (f) => set({ lastFlight: f }),
   setLastMission: (id, patches) => set({ lastMissionId: id, lastNewPatches: patches }),
+
+  debugCertifyAll: async () => {
+    const state = get();
+    const installedParts = { ...state.design.installedParts };
+    for (const p of Object.keys(installedParts) as RocketPart[]) {
+      installedParts[p] = { ...installedParts[p]!, certified: true };
+    }
+    const design = { ...state.design, installedParts };
+    set({ design });
+    await persistDesign(design);
+    await persistMission({ ...get(), design });
+  },
 
   resetBuild: async () => {
     const design = emptyDesign();

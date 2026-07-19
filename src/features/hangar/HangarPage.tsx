@@ -9,6 +9,7 @@ import { PATCH_BY_ID } from "../../mission/patches";
 import SitePicker from "./SitePicker";
 import MissionCamera from "../../components/MissionCamera";
 import TimeOfDaySlider from "../../components/TimeOfDaySlider";
+import { isDebugMode } from "../../debug";
 
 export default function HangarPage() {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export default function HangarPage() {
   const academyOpen = useRocketState((s) => s.academyOpen);
   const [showSites, setShowSites] = useState(false);
   const [photoMode, setPhotoMode] = useState(false);
+  const debug = isDebugMode();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // First visit: pick the launch site.
@@ -44,14 +46,19 @@ export default function HangarPage() {
 
       {/* Left HUD: mission destination */}
       <div className="absolute left-4 top-4 w-72 space-y-3 z-10">
+        {debug && (
+          <div className="hud-panel px-3 py-1.5 text-xs text-amber-300 !border-amber-400/60">
+            🐞 Debug mode — all missions unlocked <span className="text-slate-400">(?debug=off to disable)</span>
+          </div>
+        )}
         <div className="hud-panel p-4">
           <div className="hud-title mb-2">Mission destination</div>
           <div className="space-y-2">
             {DESTINATIONS.map((d) => {
               const isAcademy = d.keyStage === "ks3";
-              const locked = isAcademy
-                ? !academyOpen || ks3MasteryPct < d.unlockMastery
-                : masteryPct < d.unlockMastery;
+              const locked =
+                !debug &&
+                (isAcademy ? !academyOpen || ks3MasteryPct < d.unlockMastery : masteryPct < d.unlockMastery);
               const active = destinationId === d.id;
               return (
                 <button

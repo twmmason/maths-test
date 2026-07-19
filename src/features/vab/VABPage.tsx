@@ -18,6 +18,7 @@ import { generateChecklist } from "../../engine/templates/checklist";
 import { createRng, randomSeed } from "../../engine/rng";
 import { computePerformance } from "../../physics/computePerformance";
 import { sfx } from "../../mission/sound";
+import { isDebugMode } from "../../debug";
 import type { RocketPart } from "../../curriculum/types";
 
 export default function VABPage() {
@@ -32,7 +33,9 @@ export default function VABPage() {
   const updateDesign = useRocketState((s) => s.updateDesign);
   const adjustSpareParts = useRocketState((s) => s.adjustSpareParts);
   const resetBuild = useRocketState((s) => s.resetBuild);
+  const debugCertifyAll = useRocketState((s) => s.debugCertifyAll);
   const [preflight, setPreflight] = useState(false);
+  const debug = isDebugMode();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const site = SITE_BY_ID[profile?.launchSiteId ?? "canaveral"];
@@ -41,7 +44,7 @@ export default function VABPage() {
   const attached = Object.keys(design.installedParts) as RocketPart[];
   const allCertified = attached.length > 0 && attached.every((p) => design.installedParts[p]?.certified);
   const missingRequired = REQUIRED_PARTS.filter((p) => !design.installedParts[p]);
-  const readyForPreflight = allCertified && missingRequired.length === 0;
+  const readyForPreflight = debug || (allCertified && missingRequired.length === 0);
   const perf = computePerformance(design);
 
   return (
@@ -134,7 +137,9 @@ export default function VABPage() {
               }
               onClick={() => {
                 sfx.snap();
-                setPreflight(true);
+                // Debug: straight to the pad — no checklist maths.
+                if (debug) navigate("/launch");
+                else setPreflight(true);
               }}
             >
               ✅ Pre-flight →
@@ -145,6 +150,18 @@ export default function VABPage() {
 
       {/* Right column */}
       <div className="w-96 shrink-0 flex flex-col gap-3 overflow-auto">
+        {debug && (
+          <div className="hud-panel px-3 py-2 text-xs space-y-2 !border-amber-400/60">
+            <div className="text-amber-300 font-bold">🐞 Debug mode <span className="font-normal text-slate-400">(?debug=off to disable)</span></div>
+            <button
+              className="btn-ghost w-full !py-1 text-xs justify-center !border-amber-400/40"
+              onClick={() => void debugCertifyAll()}
+            >
+              ✅ Certify all attached parts
+            </button>
+            <div className="text-[10px] text-slate-400">Pre-flight launches instantly — no checklist, no required-parts gate.</div>
+          </div>
+        )}
         <PerformancePanel design={design} destinationId={destinationId} />
         {profile && (
           <MissionTargetsPanel profileId={profile.id} destinationId={destinationId} design={design} mode="next" />
