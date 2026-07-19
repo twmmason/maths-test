@@ -4,7 +4,7 @@ import { attemptsFor, missionsFor, type MissionRecord, type Attempt } from "../.
 import { getActiveProfileId } from "../../db/seed";
 import { useRocketState } from "../../mission/useRocketState";
 import { computeMastery, masteryPercent, type CriterionMastery } from "../../engine/mastery";
-import { CRITERIA, STRANDS } from "../../curriculum/criteria";
+import { CRITERIA, STRANDS, KS3_STRANDS } from "../../curriculum/criteria";
 import { PATCHES } from "../../mission/patches";
 import { DESTINATION_BY_ID } from "../../mission/destinations";
 import { SITE_BY_ID } from "../../mission/launchSites";
@@ -13,7 +13,34 @@ function CoverageMap({ mastery, attempts }: { mastery: Map<string, CriterionMast
   const attempted = new Set(attempts.map((a) => a.criterionCode));
   return (
     <div className="space-y-2">
+      <div className="text-[10px] uppercase tracking-widest text-cyan-400">KS2 — Ready to Progress (81)</div>
       {STRANDS.map((strand) => {
+        const items = CRITERIA.filter((c) => c.strand === strand.id);
+        return (
+          <div key={strand.id} className="flex items-center gap-2">
+            <div className="w-40 shrink-0 text-xs text-slate-400">{strand.label}</div>
+            <div className="flex flex-wrap gap-1">
+              {items.map((c) => {
+                const m = mastery.get(c.code);
+                const cls = m?.mastered
+                  ? "bg-emerald-400/80 border-emerald-300"
+                  : attempted.has(c.code)
+                    ? "bg-amber-400/60 border-amber-300"
+                    : "bg-space-700 border-slate-600";
+                return (
+                  <div
+                    key={c.code}
+                    title={`${c.code} — ${c.description}${m?.mastered ? " ✅ mastered" : attempted.has(c.code) ? " · in progress" : ""}`}
+                    className={`w-4 h-4 rounded-sm border ${cls}`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      <div className="text-[10px] uppercase tracking-widest text-violet-300 pt-2">🎓 KS3 — Astronaut Academy (65)</div>
+      {KS3_STRANDS.map((strand) => {
         const items = CRITERIA.filter((c) => c.strand === strand.id);
         return (
           <div key={strand.id} className="flex items-center gap-2">

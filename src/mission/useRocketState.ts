@@ -3,7 +3,7 @@ import type { RocketPart } from "../curriculum/types";
 import { emptyDesign, type RocketDesign } from "../three/rocketDesign";
 import { db, attemptsFor, type Profile, type Attempt } from "../db/db";
 import { loadActiveProfile, getActiveProfileId, clearActiveProfileId } from "../db/seed";
-import { xpForAttempt, computeMastery, masteryPercent } from "../engine/mastery";
+import { xpForAttempt, computeMastery, masteryPercent, isAcademyUnlocked } from "../engine/mastery";
 import { planPart, type PartPlan } from "./runPlanner";
 import { VARIANT_BY_ID, type PartVariant } from "./partsCatalog";
 import type { FlightResult } from "../physics/types";
@@ -21,6 +21,10 @@ export interface RocketState {
   tasksCorrect: number;
   tasksTotal: number;
   masteryPct: number;
+  /** KS3 Academy mastery fraction (0..1). */
+  ks3MasteryPct: number;
+  /** Astronaut Academy open (60% KS2 mastery OR Year 7+ profile toggle). */
+  academyOpen: boolean;
   lastFlight: (FlightResult & { screenshot?: string }) | null;
   lastMissionId: number | null;
   lastNewPatches: string[];
@@ -77,6 +81,8 @@ export const useRocketState = create<RocketState>((set, get) => ({
   tasksCorrect: 0,
   tasksTotal: 0,
   masteryPct: 0,
+  ks3MasteryPct: 0,
+  academyOpen: false,
   lastFlight: null,
   lastMissionId: null,
   lastNewPatches: [],
@@ -93,7 +99,7 @@ export const useRocketState = create<RocketState>((set, get) => ({
     const design = saved?.design ?? profile.rocketDesign ?? emptyDesign();
     const partPlans: Partial<Record<RocketPart, PartPlan>> = {};
     for (const part of Object.keys(design.installedParts) as RocketPart[]) {
-      partPlans[part] = planPart(part, saved?.destinationId ?? "lowOrbit", attempts);
+      partPlans[part] = planPart(part, saved?.destinationId ?? "lowOrbit", attempts, 2, Date.now(), isAcademyUnlocked(computeMastery(attempts), profile.academyUnlocked));
     }
     set({
       ready: true,
@@ -105,6 +111,8 @@ export const useRocketState = create<RocketState>((set, get) => ({
       tasksCorrect: saved?.tasksCorrect ?? 0,
       tasksTotal: saved?.tasksTotal ?? 0,
       masteryPct: masteryPercent(computeMastery(attempts)),
+      ks3MasteryPct: masteryPercent(computeMastery(attempts), "ks3"),
+      academyOpen: isAcademyUnlocked(computeMastery(attempts), profile.academyUnlocked),
     });
   },
 
@@ -143,7 +151,7 @@ export const useRocketState = create<RocketState>((set, get) => ({
     };
     if (radialCount && variant.part === "fins") design.finCount = radialCount;
     if (radialCount && variant.part === "booster") design.boosterCount = radialCount;
-    const partPlans = { ...state.partPlans, [variant.part]: planPart(variant.part, state.destinationId, attempts) };
+    const partPlans = { ...state.partPlans, [variant.part]: planPart(variant.part, state.destinationId, attempts, 2, Date.now(), state.academyOpen) };
     const completedTasks = { ...state.completedTasks, [variant.part]: [] };
     set({ design, partPlans, completedTasks, selectedPart: variant.part });
     await persistDesign(design);
@@ -228,7 +236,12 @@ export const useRocketState = create<RocketState>((set, get) => ({
   refreshMastery: async () => {
     const profile = get().profile;
     const attempts = profile ? await attemptsFor(profile.id) : [];
-    set({ masteryPct: masteryPercent(computeMastery(attempts)) });
+    const mastery = computeMastery(attempts);
+    set({
+      masteryPct: masteryPercent(mastery),
+      ks3MasteryPct: masteryPercent(mastery, "ks3"),
+      academyOpen: isAcademyUnlocked(mastery, profile?.academyUnlocked),
+    });
   },
 
   setLastFlight: (f) => set({ lastFlight: f }),

@@ -123,3 +123,13 @@ export function xpForAttempt(tier: number, correct: boolean, hintsUsed: number):
   if (!correct) return 1;
   return Math.max(2, tier * 10 - hintsUsed * 3);
 }
+/**
+ * Astronaut Academy access (PROMPT_KS3 §5): opens at 60% KS2 mastery OR via
+ * the profile's explicit "I'm in Year 7+" toggle.
+ */
+export function isAcademyUnlocked(
+  mastery: Map<string, CriterionMastery>,
+  profileToggle?: boolean,
+): boolean {
+  return Boolean(profileToggle) || masteryPercent(mastery, "ks2") >= 0.6;
+}

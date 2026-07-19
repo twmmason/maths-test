@@ -16,6 +16,8 @@ export default function HangarPage() {
   const destinationId = useRocketState((s) => s.destinationId);
   const setDestination = useRocketState((s) => s.setDestination);
   const masteryPct = useRocketState((s) => s.masteryPct);
+  const ks3MasteryPct = useRocketState((s) => s.ks3MasteryPct);
+  const academyOpen = useRocketState((s) => s.academyOpen);
   const [showSites, setShowSites] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -43,7 +45,10 @@ export default function HangarPage() {
           <div className="hud-title mb-2">Mission destination</div>
           <div className="space-y-2">
             {DESTINATIONS.map((d) => {
-              const locked = masteryPct < d.unlockMastery;
+              const isAcademy = d.keyStage === "ks3";
+              const locked = isAcademy
+                ? !academyOpen || ks3MasteryPct < d.unlockMastery
+                : masteryPct < d.unlockMastery;
               const active = destinationId === d.id;
               return (
                 <button
@@ -60,7 +65,14 @@ export default function HangarPage() {
                 >
                   <div className="font-bold">
                     {d.emoji} {d.name}
-                    {locked && <span className="text-[10px] text-amber-300 ml-2">🔒 {Math.round(d.unlockMastery * 100)}% mastery</span>}
+                    {isAcademy && !locked && <span className="text-[10px] text-violet-300 ml-2">🎓 Academy</span>}
+                    {locked && (
+                      <span className="text-[10px] text-amber-300 ml-2">
+                        {isAcademy && !academyOpen
+                          ? "🎓 Academy opens at 60% KS2 mastery (or Year 7+ toggle)"
+                          : `🔒 ${Math.round(d.unlockMastery * 100)}% ${isAcademy ? "KS3 " : ""}mastery`}
+                      </span>
+                    )}
                   </div>
                   <div className="text-[11px] text-slate-400">{d.blurb}</div>
                 </button>

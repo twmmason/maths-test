@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CRITERIA, STRANDS } from "../../curriculum/criteria";
+import { CRITERIA, STRANDS, KS3_STRANDS } from "../../curriculum/criteria";
 import { TEMPLATES, generateTask } from "../../engine";
 import { hasKey } from "../../ai/gemini";
 import { db } from "../../db/db";
@@ -39,7 +39,7 @@ export default function DevStatusPage() {
 
   const byCode = new Map(statuses.map((s) => [s.code, s]));
   const okCount = statuses.filter((s) => s.ok).length;
-  const years = [1, 2, 3, 4, 5, 6];
+  const years = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
   return (
     <div className="h-full overflow-auto p-4">
@@ -84,7 +84,7 @@ export default function DevStatusPage() {
               </tr>
             </thead>
             <tbody>
-              {STRANDS.map((strand) => (
+              {[...STRANDS, ...KS3_STRANDS].map((strand) => (
                 <tr key={strand.id}>
                   <td className="pr-3 py-1 text-slate-300">{strand.label}</td>
                   {years.map((y) => {

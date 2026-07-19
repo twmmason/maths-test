@@ -1,4 +1,4 @@
-import type { RocketPart } from "../curriculum/types";
+import type { KeyStage, RocketPart } from "../curriculum/types";
 import type { Attempt } from "../db/db";
 import { CRITERIA } from "../curriculum/criteria";
 import { computeMastery } from "../engine/mastery";
@@ -7,7 +7,39 @@ import { DESTINATION_BY_ID } from "./destinations";
 
 export interface PartPlan {
   part: RocketPart;
+  /** Which syllabus this fit-out certifies (never mixed within one part). */
+  keyStage: KeyStage;
   criteria: { code: string; tier: 1 | 2 | 3 }[];
+}
+
+/**
+ * Choose a part's fit-out key stage (PROMPT_KS3 §5): a part is EITHER a KS2
+ * or a KS3 fit-out — never mixed. Academy (KS3) is chosen when the Academy is
+ * open AND either a KS3 review is due, or the part's KS2 pool is largely
+ * mastered with KS3 work still to do. Academy destinations always fly KS3.
+ */
+export function partKeyStage(
+  part: RocketPart,
+  destinationId: string,
+  attempts: Attempt[],
+  academyOpen: boolean,
+  now = Date.now(),
+): KeyStage {
+  const destination = DESTINATION_BY_ID[destinationId];
+  if (destination?.keyStage === "ks3") return academyOpen ? "ks3" : "ks2";
+  if (!academyOpen) return "ks2";
+  const mastery = computeMastery(attempts);
+  const ks3Codes = criteriaForPart(part, "ks3");
+  if (ks3Codes.length === 0) return "ks2";
+  const ks3Due = ks3Codes.some((c) => {
+    const m = mastery.get(c);
+    return m?.mastered && m.dueAt !== null && m.dueAt <= now;
+  });
+  if (ks3Due) return "ks3";
+  const ks2Codes = criteriaForPart(part, "ks2");
+  const ks2Mastered = ks2Codes.filter((c) => mastery.get(c)?.mastered).length;
+  const ks3Unmastered = ks3Codes.some((c) => !mastery.get(c)?.mastered);
+  return ks2Codes.length > 0 && ks2Mastered / ks2Codes.length >= 0.6 && ks3Unmastered ? "ks3" : "ks2";
 }
 
 const YEAR_ORDER = (code: string) => {
@@ -28,11 +60,13 @@ export function planPart(
   attempts: Attempt[],
   count = 2,
   now = Date.now(),
+  academyOpen = false,
 ): PartPlan {
   const destination = DESTINATION_BY_ID[destinationId];
   const tiers = destination?.tiers ?? [1];
   const mastery = computeMastery(attempts);
-  const codes = criteriaForPart(part);
+  const keyStage = partKeyStage(part, destinationId, attempts, academyOpen, now);
+  const codes = criteriaForPart(part, keyStage);
 
   const due = codes.filter((c) => {
     const m = mastery.get(c);
@@ -49,6 +83,7 @@ export function planPart(
 
   return {
     part,
+    keyStage,
     criteria: chosen.map((code) => {
       const m = mastery.get(code);
       // Start easy for brand-new criteria; use destination tiers otherwise.

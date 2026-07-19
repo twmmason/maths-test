@@ -37,7 +37,7 @@ function slugify(name: string): string {
     .replace(/^-+|-+$/g, "") || "commander";
 }
 
-export function defaultProfile(id: string, name: string): Profile {
+export function defaultProfile(id: string, name: string, academyUnlocked = false): Profile {
   return {
     id,
     name,
@@ -52,6 +52,7 @@ export function defaultProfile(id: string, name: string): Profile {
       fins: 1, payloadBay: 1, electronics: 1, booster: 1,
     },
     patches: [],
+    academyUnlocked,
   };
 }
 
@@ -62,7 +63,7 @@ export async function listProfiles(): Promise<Profile[]> {
 }
 
 /** Create (or reuse) a profile for the given name and make it active. */
-export async function createProfile(name: string): Promise<Profile> {
+export async function createProfile(name: string, academyUnlocked = false): Promise<Profile> {
   const clean = name.trim().slice(0, 24);
   let id = slugify(clean);
   const existing = await db.profiles.get(id);
@@ -72,7 +73,7 @@ export async function createProfile(name: string): Promise<Profile> {
     setCommanderName(existing.name);
     return existing;
   }
-  const profile = defaultProfile(id, clean);
+  const profile = defaultProfile(id, clean, academyUnlocked);
   await db.profiles.put(profile);
   setActiveProfileId(id);
   setCommanderName(clean);

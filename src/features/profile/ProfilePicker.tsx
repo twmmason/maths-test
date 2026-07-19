@@ -22,6 +22,8 @@ export default function ProfilePicker() {
     });
   }, []);
 
+  const [year7, setYear7] = useState(false);
+
   const pick = async (id: string) => {
     if (busy) return;
     setBusy(true);
@@ -34,7 +36,7 @@ export default function ProfilePicker() {
     const clean = name.trim();
     if (!clean || busy) return;
     setBusy(true);
-    const profile = await createProfile(clean);
+    const profile = await createProfile(clean, year7);
     await activateProfile(profile);
     setBusy(false);
   };
@@ -85,6 +87,15 @@ export default function ProfilePicker() {
             Start engineering →
           </button>
         </div>
+        <label className="mt-3 flex items-center justify-center gap-2 text-xs text-slate-300">
+          <input
+            type="checkbox"
+            checked={year7}
+            onChange={(e) => setYear7(e.target.checked)}
+            aria-label="I'm in Year 7 or above — open the Astronaut Academy straight away"
+          />
+          🎓 I'm in Year 7+ — open the Astronaut Academy straight away
+        </label>
         <p className="text-xs text-slate-500 mt-4">
           Each commander gets their own rocket, XP, patches and mission log — all saved on this device.
         </p>
