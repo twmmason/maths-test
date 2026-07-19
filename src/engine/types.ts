@@ -10,7 +10,18 @@ export type WidgetKind =
   | "grid"
   | "circuit"
   | "barModel"
-  | "checklist";
+  | "checklist"
+  // KS3 Astronaut Academy widgets
+  | "equation"
+  | "graphPlot"
+  | "sequence"
+  | "standardForm"
+  | "construction"
+  | "triangle"
+  | "venn"
+  | "sampleSpace"
+  | "chart"
+  | "scaleMap";
 
 export interface VisualSpec {
   widget: WidgetKind;

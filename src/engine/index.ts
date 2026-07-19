@@ -8,6 +8,12 @@ import { engineTemplates } from "./templates/engine";
 import { finsTemplates } from "./templates/fins";
 import { payloadTemplates } from "./templates/payload";
 import { electronicsTemplates } from "./templates/electronics";
+import { ks3NumberTemplates } from "./templates/ks3-number";
+import { ks3AlgebraTemplates } from "./templates/ks3-algebra";
+import { ks3RatioTemplates } from "./templates/ks3-ratio";
+import { ks3GeometryTemplates } from "./templates/ks3-geometry";
+import { ks3ProbabilityTemplates } from "./templates/ks3-probability";
+import { ks3StatisticsTemplates } from "./templates/ks3-statistics";
 
 export type TaskGenerator = (rng: Rng, tier: 1 | 2 | 3) => GeneratedTask;
 
@@ -20,6 +26,13 @@ export const TEMPLATES: Record<string, TaskGenerator> = {
   ...finsTemplates,
   ...payloadTemplates,
   ...electronicsTemplates,
+  // KS3 Astronaut Academy domains
+  ...ks3NumberTemplates,
+  ...ks3AlgebraTemplates,
+  ...ks3RatioTemplates,
+  ...ks3GeometryTemplates,
+  ...ks3ProbabilityTemplates,
+  ...ks3StatisticsTemplates,
 };
 
 /** Generate an engineering task for a criterion at a tier (deterministic when seeded). */

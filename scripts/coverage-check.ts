@@ -1,9 +1,10 @@
 /**
- * pnpm verify gate: exits non-zero if any of the 81 criteria lacks a working
- * template, if any generated briefing contains an operation symbol (§10 rule 4),
- * or if any part category has no certification tasks.
+ * pnpm verify gate: exits non-zero if any of the 146 criteria (81 KS2 RTP +
+ * 65 KS3 Astronaut Academy) lacks a working template, if any generated
+ * briefing contains an operation symbol (§10 rule 4 — KS3 notation lives in
+ * widgets, never briefings), or if any part category has no tasks.
  */
-import { CRITERIA } from "../src/curriculum/criteria";
+import { CRITERIA, KS2_CRITERIA, KS3_CRITERIA } from "../src/curriculum/criteria";
 import { TEMPLATES, generateTask } from "../src/engine/index";
 import { generateChecklist } from "../src/engine/templates/checklist";
 import { createRng } from "../src/engine/rng";
@@ -36,11 +37,12 @@ for (const c of CRITERIA) {
   }
 }
 
-// 2. Every part category has certification tasks.
+// 2. Every part category has certification tasks in BOTH key stages
+// (boosters reuse engine templates and Academy fit-outs are optional there).
 const parts: RocketPart[] = ["noseCone", "hull", "fuelTank", "engine", "fins", "payloadBay", "electronics", "booster"];
 for (const part of parts) {
-  const codes = criteriaForPart(part);
-  if (codes.length === 0) errors.push(`PART WITHOUT TASKS: ${part}`);
+  if (criteriaForPart(part, "ks2").length === 0) errors.push(`PART WITHOUT KS2 TASKS: ${part}`);
+  if (criteriaForPart(part, "ks3").length === 0) errors.push(`PART WITHOUT KS3 TASKS: ${part}`);
 }
 
 // 3. Pre-flight checklist generates clean items.
@@ -59,4 +61,7 @@ if (errors.length) {
   for (const e of errors) console.error(" - " + e);
   process.exit(1);
 }
-console.log(`✅ Coverage check passed: ${CRITERIA.length}/81 criteria covered, all briefings clean, all ${parts.length} part categories have tasks.`);
+const ks2Covered = KS2_CRITERIA.filter((c) => TEMPLATES[c.code]).length;
+const ks3Covered = KS3_CRITERIA.filter((c) => TEMPLATES[c.code]).length;
+console.log(`KS2 ${ks2Covered}/81 ${ks2Covered === 81 ? "✅" : "❌"}  KS3 ${ks3Covered}/65 ${ks3Covered === 65 ? "✅" : "❌"}`);
+console.log(`✅ Coverage check passed: ${CRITERIA.length}/146 criteria covered, all briefings clean, all ${parts.length} part categories have tasks.`);

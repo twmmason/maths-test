@@ -232,7 +232,7 @@ as each system goes green.
 ## 4. Tech Stack & Architecture
 
 ### Stack
-- **React 18** + TypeScript + Vite (port 3003)
+- **React 18** + TypeScript + Vite (port 3002)
 - **Tailwind CSS** for UI panels/HUD
 - **Three.js** via `@react-three/fiber` (v8, React 18 compat) + `@react-three/drei`
 - **Zustand** for app/rocket state (simple, works inside and outside the Canvas)
@@ -1002,7 +1002,7 @@ entire strand, perfect mission, etc.
 ## 9. Build Phases
 
 Build in this order. After each phase, verify the "Done when" criteria in the
-browser at localhost:3003 before moving on. **Ship simple and working before
+browser at localhost:3002 before moving on. **Ship simple and working before
 fancy** — a plain but playable phase beats a beautiful broken one.
 
 Write **Vitest unit tests as you go** for the pure logic (no 3D):

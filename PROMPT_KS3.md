@@ -341,7 +341,7 @@ verify each mode end-to-end in the browser with the real keys:
 - Multi-profile system (each commander keeps an independent KS2+KS3 record).
 - The deterministic maths core (generation/checking/mastery/physics) stays
   LLM-free so `pnpm verify` runs headless without keys.
-- `run.sh` boot, port 3003, `pnpm verify` as the single green/red command.
+- `run.sh` boot, port 3002, `pnpm verify` as the single green/red command.
 
 ---
 

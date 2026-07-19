@@ -16,6 +16,16 @@ import GridWidget from "./widgets/GridWidget";
 import CircuitWidget from "./widgets/CircuitWidget";
 import BarModelWidget from "./widgets/BarModelWidget";
 import ChecklistWidget from "./widgets/ChecklistWidget";
+import EquationWidget from "./widgets/EquationWidget";
+import GraphPlotWidget from "./widgets/GraphPlotWidget";
+import SequenceWidget from "./widgets/SequenceWidget";
+import StandardFormWidget from "./widgets/StandardFormWidget";
+import ConstructionWidget from "./widgets/ConstructionWidget";
+import TriangleWidget from "./widgets/TriangleWidget";
+import VennWidget from "./widgets/VennWidget";
+import SampleSpaceWidget from "./widgets/SampleSpaceWidget";
+import ChartWidget from "./widgets/ChartWidget";
+import ScaleMapWidget from "./widgets/ScaleMapWidget";
 
 const WIDGETS = {
   protractor: ProtractorWidget,
@@ -28,6 +38,17 @@ const WIDGETS = {
   circuit: CircuitWidget,
   barModel: BarModelWidget,
   checklist: ChecklistWidget,
+  // KS3 Astronaut Academy widgets
+  equation: EquationWidget,
+  graphPlot: GraphPlotWidget,
+  sequence: SequenceWidget,
+  standardForm: StandardFormWidget,
+  construction: ConstructionWidget,
+  triangle: TriangleWidget,
+  venn: VennWidget,
+  sampleSpace: SampleSpaceWidget,
+  chart: ChartWidget,
+  scaleMap: ScaleMapWidget,
 } as const;
 
 export interface TaskResult {

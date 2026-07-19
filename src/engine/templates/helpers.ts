@@ -103,6 +103,66 @@ export function roundTo(n: number, nearest: number): number {
   return Math.round(n / nearest) * nearest;
 }
 
+export function lcm(a: number, b: number): number {
+  return (a * b) / gcd(a, b);
+}
+
+/** Prime factorisation in product notation, e.g. 24 → "2^3 × 3". */
+export function primeFactorisation(n: number): string {
+  const factors: Record<number, number> = {};
+  let m = n;
+  for (let p = 2; p * p <= m; p++) {
+    while (m % p === 0) {
+      factors[p] = (factors[p] ?? 0) + 1;
+      m /= p;
+    }
+  }
+  if (m > 1) factors[m] = (factors[m] ?? 0) + 1;
+  return Object.entries(factors)
+    .map(([p, e]) => (e === 1 ? p : `${p}^${e}`))
+    .join(" × ");
+}
+
+/** Fixed-decimal string without trailing zeros beyond dp, e.g. dec(7.5, 2) → "7.5". */
+export function dec(n: number, dp = 2): string {
+  return String(Math.round(n * 10 ** dp) / 10 ** dp);
+}
+
+/** Round to a number of significant figures. */
+export function roundSf(n: number, sf: number): number {
+  if (n === 0) return 0;
+  const mag = Math.floor(Math.log10(Math.abs(n)));
+  const factor = 10 ** (sf - 1 - mag);
+  return Math.round(n * factor) / factor;
+}
+
+export function mean(xs: number[]): number {
+  return xs.reduce((s, x) => s + x, 0) / xs.length;
+}
+
+export function median(xs: number[]): number {
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+export function mode(xs: number[]): number {
+  const counts = new Map<number, number>();
+  for (const x of xs) counts.set(x, (counts.get(x) ?? 0) + 1);
+  let best = xs[0], bestCount = 0;
+  for (const [x, c] of counts) {
+    if (c > bestCount) {
+      best = x;
+      bestCount = c;
+    }
+  }
+  return best;
+}
+
+export function range(xs: number[]): number {
+  return Math.max(...xs) - Math.min(...xs);
+}
+
 export function digitName(place: number): string {
   const names: Record<number, string> = { 1: "ones", 10: "tens", 100: "hundreds", 1000: "thousands" };
   return names[place] ?? "ones";

@@ -4,7 +4,7 @@ The living status board (§9 of PROMPT.md). Nothing below is ticked unless it
 was verified by a test or in the browser. Single green/red command: `pnpm verify`.
 
 ## Phase 1: Foundation   Status: ✅ COMPLETE (2026-07-19)
-- [x] Vite + React 18 + TS + Tailwind project setup — `./run.sh` boots on :3003, `tsc -b` clean
+- [x] Vite + React 18 + TS + Tailwind project setup — `./run.sh` boots on :3002, `tsc -b` clean
 - [x] Dexie DB with schema — profiles / attempts / missions / savedMissions (`src/db/db.ts`), profile seeded on first load
 - [x] Curriculum types + all 81 criteria — `src/curriculum/criteria.ts`, checked against docs/Maths_guidance_year_6.pdf codes
 - [x] Basic routing (Hangar, VAB, Launch, Report, FlightLog, Sandbox, /dev/status) — `src/app/App.tsx`

@@ -1,14 +1,15 @@
-import type { RocketPart } from "../curriculum/types";
+import type { KeyStage, RocketPart } from "../curriculum/types";
 import { PART_STRANDS } from "../engine/mastery";
 import { CRITERIA } from "../curriculum/criteria";
 
 export { PART_STRANDS };
 
-/** All criterion codes certified through a given rocket part.
+/** All criterion codes certified through a given rocket part for one key
+ * stage (default KS2, so pre-Academy behaviour is unchanged).
  * Boosters reuse the engine's NF+MD templates (booster context). */
-export function criteriaForPart(part: RocketPart): string[] {
+export function criteriaForPart(part: RocketPart, keyStage: KeyStage = "ks2"): string[] {
   const effective = part === "booster" ? "engine" : part;
-  return CRITERIA.filter((c) => c.part === effective).map((c) => c.code);
+  return CRITERIA.filter((c) => c.part === effective && c.keyStage === keyStage).map((c) => c.code);
 }
 
 export const PART_MATERIALS: Record<RocketPart, { color: string; roughness: number; metalness: number; opacity?: number }> = {

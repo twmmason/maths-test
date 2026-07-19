@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CRITERIA } from "../curriculum/criteria";
+import { CRITERIA, KS2_CRITERIA, KS3_CRITERIA } from "../curriculum/criteria";
 import { TEMPLATES, generateTask, checkAnswer } from "./index";
 import { generateChecklist } from "./templates/checklist";
 import { createRng } from "./rng";
@@ -9,10 +9,12 @@ const TIERS = [1, 2, 3] as const;
 const SEEDS = [1, 42, 999, 31337];
 
 describe("task templates", () => {
-  it("covers every one of the 81 criteria", () => {
+  it("covers every one of the 146 criteria (81 KS2 + 65 KS3)", () => {
     const missing = CRITERIA.filter((c) => !TEMPLATES[c.code]).map((c) => c.code);
     expect(missing).toEqual([]);
-    expect(CRITERIA.length).toBe(81);
+    expect(KS2_CRITERIA.length).toBe(81);
+    expect(KS3_CRITERIA.length).toBe(65);
+    expect(CRITERIA.length).toBe(146);
   });
 
   for (const c of CRITERIA) {

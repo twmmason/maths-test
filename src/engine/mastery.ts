@@ -1,6 +1,6 @@
 import type { Attempt } from "../db/db";
-import { CRITERIA } from "../curriculum/criteria";
-import type { RocketPart, Strand } from "../curriculum/types";
+import { CRITERIA, criteriaForKeyStage } from "../curriculum/criteria";
+import type { KeyStage, RocketPart, Strand } from "../curriculum/types";
 
 const DAY = 24 * 60 * 60 * 1000;
 /** Spaced-repetition intervals in days: 1 → 3 → 7 → 14. */
@@ -67,31 +67,40 @@ export function computeMastery(attempts: Attempt[]): Map<string, CriterionMaster
   return map;
 }
 
-/** Fraction of the 81 criteria mastered (0..1) — used for destination unlocks. */
-export function masteryPercent(mastery: Map<string, CriterionMastery>): number {
+/**
+ * Fraction of criteria mastered (0..1) for a key stage — used for destination
+ * unlocks. Defaults to KS2 (the original 81) so existing unlock thresholds
+ * are unchanged by the Academy expansion.
+ */
+export function masteryPercent(mastery: Map<string, CriterionMastery>, keyStage: KeyStage | "all" = "ks2"): number {
+  const pool = keyStage === "all" ? CRITERIA : criteriaForKeyStage(keyStage);
   let mastered = 0;
-  for (const m of mastery.values()) if (m.mastered) mastered += 1;
-  return mastered / CRITERIA.length;
+  for (const c of pool) if (mastery.get(c.code)?.mastered) mastered += 1;
+  return mastered / pool.length;
 }
 
-/** Mastered criterion count per strand. */
+/** Mastered criterion count per strand (KS2 strands + KS3 domains). */
 export function strandMasteryCounts(mastery: Map<string, CriterionMastery>): Record<Strand, number> {
-  const counts: Record<Strand, number> = { NPV: 0, NF: 0, AS: 0, MD: 0, F: 0, G: 0 };
+  const counts: Record<Strand, number> = {
+    NPV: 0, NF: 0, AS: 0, MD: 0, F: 0, G: 0,
+    KS3N: 0, KS3A: 0, KS3R: 0, KS3G: 0, KS3P: 0, KS3S: 0,
+  };
   for (const c of CRITERIA) {
     if (mastery.get(c.code)?.mastered) counts[c.strand] += 1;
   }
   return counts;
 }
 
-/** Strand(s) that certify each rocket part (for part upgrade levels). */
+/** Strand(s) that certify each rocket part (for part upgrade levels).
+ * KS3 Academy domains upgrade the same physical parts (senior fit-outs). */
 export const PART_STRANDS: Record<RocketPart, Strand[]> = {
-  noseCone: ["G"],
-  hull: ["NPV"],
-  fuelTank: ["NPV", "F"],
-  engine: ["NF", "MD"],
-  fins: ["G", "AS"],
-  payloadBay: ["F", "MD"],
-  electronics: ["AS", "MD"],
+  noseCone: ["G", "KS3G"],
+  hull: ["NPV", "KS3P"],
+  fuelTank: ["NPV", "F", "KS3N"],
+  engine: ["NF", "MD", "KS3S"],
+  fins: ["G", "AS", "KS3G"],
+  payloadBay: ["F", "MD", "KS3R"],
+  electronics: ["AS", "MD", "KS3A"],
   booster: ["NF", "MD"],
 };
 

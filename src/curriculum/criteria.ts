@@ -1,10 +1,11 @@
-import type { Criterion } from "./types";
+import type { Criterion, KeyStage } from "./types";
+import { KS3_CRITERIA } from "./ks3";
 
 /**
  * The 81 DfE Ready-to-Progress criteria (Years 1–6), each mapped to the
  * rocket part whose engineering tasks certify it.
  */
-export const CRITERIA: Criterion[] = [
+const KS2_RAW: Omit<Criterion, "keyStage">[] = [
   // ── NPV — Number & Place Value (21) ────────────────────────────────────
   { code: "1NPV-1", strand: "NPV", year: 1, part: "hull", description: "Count within 100, forwards and backwards, starting with any number" },
   { code: "1NPV-2", strand: "NPV", year: 1, part: "fuelTank", description: "Reason about the location of numbers to 20 within the linear number system" },
@@ -99,10 +100,24 @@ export const CRITERIA: Criterion[] = [
   { code: "6G-1", strand: "G", year: 6, part: "noseCone", description: "Describe properties of shapes including lines of symmetry" },
 ];
 
+/** The 81 KS2 Ready-to-Progress criteria. */
+export const KS2_CRITERIA: Criterion[] = KS2_RAW.map((c) => ({ ...c, keyStage: "ks2" as const }));
+
+export { KS3_CRITERIA };
+
+/** All criteria across both key stages (81 KS2 + 65 KS3 = 146). */
+export const CRITERIA: Criterion[] = [...KS2_CRITERIA, ...KS3_CRITERIA];
+
+/** Criteria for one key stage. */
+export function criteriaForKeyStage(keyStage: KeyStage): Criterion[] {
+  return CRITERIA.filter((c) => c.keyStage === keyStage);
+}
+
 export const CRITERIA_BY_CODE: Record<string, Criterion> = Object.fromEntries(
   CRITERIA.map((c) => [c.code, c]),
 );
 
+/** KS2 strands (Flight Log coverage map, patches). */
 export const STRANDS: { id: Criterion["strand"]; label: string }[] = [
   { id: "NPV", label: "Number & Place Value" },
   { id: "NF", label: "Number Facts" },
@@ -110,4 +125,14 @@ export const STRANDS: { id: Criterion["strand"]; label: string }[] = [
   { id: "MD", label: "Multiplication & Division" },
   { id: "F", label: "Fractions" },
   { id: "G", label: "Geometry" },
+];
+
+/** KS3 Astronaut Academy domains and their engineering facilities. */
+export const KS3_STRANDS: { id: Criterion["strand"]; label: string; facility: string }[] = [
+  { id: "KS3N", label: "Number", facility: "Propellant Chemistry Lab" },
+  { id: "KS3A", label: "Algebra", facility: "Flight Computer" },
+  { id: "KS3R", label: "Ratio & Proportion", facility: "Mission Planning Office" },
+  { id: "KS3G", label: "Geometry & Measures", facility: "Structures & Trajectory Bay" },
+  { id: "KS3P", label: "Probability", facility: "Mission Risk Console" },
+  { id: "KS3S", label: "Statistics", facility: "Telemetry Science Deck" },
 ];
