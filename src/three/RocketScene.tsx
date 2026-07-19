@@ -96,7 +96,7 @@ export function Launchpad({ site, towerRetracted = false, ground = true }: { sit
  *  (a part was clicked in the VAB). When focusY is null the camera is fully
  *  user-controlled — no lerp, no override. This prevents the camera from
  *  snapping back after the user zooms out. */
-function CameraRig({ focusY, distance = 12 }: { focusY: number | null; distance?: number }) {
+function CameraRig({ focusY, distance = 12, controlsRef }: { focusY: number | null; distance?: number; controlsRef?: MutableRefObject<any> }) {
   const { camera } = useThree();
   const target = useRef(new THREE.Vector3(0, 4, 0));
   const prevFocusY = useRef<number | null>(null);
@@ -124,7 +124,15 @@ function CameraRig({ focusY, distance = 12 }: { focusY: number | null; distance?
     const dir = new THREE.Vector3(camera.position.x, 0, camera.position.z).normalize();
     const wantPos = new THREE.Vector3(dir.x * wantDist, wantY + 2, dir.z * wantDist);
     camera.position.lerp(wantPos, Math.min(1, dt * 2.5));
-    camera.lookAt(target.current);
+    // Move the OrbitControls target WITH the focus — otherwise controls
+    // re-apply their own target next frame and the camera snaps back.
+    const controls = controlsRef?.current;
+    if (controls) {
+      controls.target.copy(target.current);
+      controls.update();
+    } else {
+      camera.lookAt(target.current);
+    }
 
     // Stop animating once we're close enough (don't fight the user)
     if (t >= 1) animating.current = false;
@@ -224,7 +232,7 @@ export default function RocketScene({
           </Suspense>
         </>
       )}
-      {controlsEnabled && <CameraRig focusY={focusY} distance={cameraDistance} />}
+      {controlsEnabled && <CameraRig focusY={focusY} distance={cameraDistance} controlsRef={controlsRef} />}
       {controlsEnabled && (
         <OrbitControls
           ref={controlsRef}

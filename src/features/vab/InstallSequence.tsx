@@ -9,12 +9,31 @@ import { CRITERIA_BY_CODE } from "../../curriculum/criteria";
 import { WIDGETS } from "../../components/TaskRenderer";
 import { sfx } from "../../mission/sound";
 
+// One neutral badge style for every step kind — the icon says what the job
+// is; colour is reserved for meaning (warnings, costs), not decoration.
 const KIND_BADGE: Record<string, { label: string; cls: string }> = {
-  fit: { label: "FIT", cls: "border-cyan-400/50 text-cyan-300" },
-  torque: { label: "TORQUE / SET", cls: "border-amber-400/50 text-amber-300" },
-  connect: { label: "CONNECT", cls: "border-violet-400/50 text-violet-300" },
-  inspect: { label: "INSPECT", cls: "border-emerald-400/50 text-emerald-300" },
+  fit: { label: "🔩 FIT", cls: "border-slate-500/60 text-slate-300" },
+  torque: { label: "🔧 SET", cls: "border-slate-500/60 text-slate-300" },
+  connect: { label: "🔌 WIRE", cls: "border-slate-500/60 text-slate-300" },
+  inspect: { label: "📋 CHECK", cls: "border-slate-500/60 text-slate-300" },
 };
+
+/** In-fiction quality verdict — real feedback, delivered as workshop feel. */
+function verdictFor(errorPct: number, skipped: boolean) {
+  if (skipped) return { tone: "skip", headline: "Inspection skipped", cls: "border-amber-500/40 text-amber-100", icon: "⏭" } as const;
+  if (errorPct === 0) return { tone: "perfect", headline: "Perfect fit — the torque wrench gives one crisp click.", cls: "border-emerald-400/60 text-emerald-100", icon: "✅" } as const;
+  if (errorPct <= 0.05) return { tone: "good", headline: "Snug fit — well within spec.", cls: "border-emerald-400/40 text-emerald-100", icon: "🟢" } as const;
+  if (errorPct <= 0.25) return { tone: "wobbly", headline: "It goes in… with a bit of a wobble. Something might be off.", cls: "border-amber-400/60 text-amber-100", icon: "🟡" } as const;
+  return { tone: "bad", headline: "The part groans and the gauge needle buries itself. This will bite at launch.", cls: "border-red-400/60 text-red-100", icon: "🔴" } as const;
+}
+
+function qualityDot(errorPct: number | undefined, skipped: boolean | undefined) {
+  if (skipped) return "⏭";
+  if (errorPct === undefined) return "";
+  if (errorPct <= 0.05) return "🟢";
+  if (errorPct <= 0.25) return "🟡";
+  return "🔴";
+}
 
 const SUBMIT_LABEL: Record<string, string> = {
   fit: "🔩 Fit it",
@@ -49,6 +68,7 @@ export default function InstallSequence({ part, onClose }: { part: RocketPart; o
   const [index, setIndex] = useState(wasCertified ? -1 : Math.max(0, firstPending));
   const [seed, setSeed] = useState(() => randomSeed());
   const [fiction, setFiction] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<ReturnType<typeof verdictFor> | null>(null);
   const [value, setValue] = useState("");
   const spareParts = profile?.spareParts ?? 10;
 
@@ -65,6 +85,7 @@ export default function InstallSequence({ part, onClose }: { part: RocketPart; o
 
   const finishStep = () => {
     setFiction(null);
+    setVerdict(null);
     setValue("");
     setSeed(randomSeed());
     if (index >= 0 && index + 1 < steps.length && !wasCertified) {
@@ -89,11 +110,16 @@ export default function InstallSequence({ part, onClose }: { part: RocketPart; o
     await completeTask(part, step.criterionCode, !skipped && evaluation.withinSpec);
     // 3. Flawless installs refund a spare-part token.
     if (!skipped && evaluation.errorPct === 0) void adjustSpareParts(1);
-    // In-fiction feedback ONLY — never "right/wrong".
-    sfx.snap();
+    // Honest workshop feedback: the player learns HOW GOOD the fit was
+    // (perfect / snug / wobbly / groaning) — the exact numbers wait for launch.
+    const v = verdictFor(evaluation.errorPct, skipped);
+    setVerdict(v);
+    if (v.tone === "perfect" || v.tone === "good") sfx.correct();
+    else if (v.tone === "bad") sfx.groan();
+    else sfx.snap();
     setFiction(
       skipped
-        ? "Inspection skipped — the clipboard goes back on its hook. Fingers crossed, Commander."
+        ? "The clipboard goes back on its hook. Fingers crossed, Commander."
         : `${step.spec.tool}${Number.isFinite(evaluation.actual) ? ` Reading: ${evaluation.actual}.` : ""}`,
     );
   };
@@ -102,6 +128,7 @@ export default function InstallSequence({ part, onClose }: { part: RocketPart; o
     if (spareParts < 1) return;
     void adjustSpareParts(-1);
     setFiction(null);
+    setVerdict(null);
     setValue("");
     setSeed(randomSeed());
   };
@@ -120,6 +147,7 @@ export default function InstallSequence({ part, onClose }: { part: RocketPart; o
             return (
               <div key={s.spec.stepId} className="flex items-center justify-between rounded-lg border border-slate-700 bg-space-800/60 px-3 py-2">
                 <div>
+                  <span className="mr-1.5">{qualityDot(r?.errorPct, r?.skipped)}</span>
                   <span className={`text-[9px] px-1.5 py-0.5 rounded border mr-2 ${KIND_BADGE[s.spec.kind].cls}`}>{KIND_BADGE[s.spec.kind].label}</span>
                   <span className="text-xs text-slate-200">{s.spec.label}</span>
                   {r?.skipped && <span className="ml-2 text-[10px] text-amber-300">inspection skipped</span>}
@@ -182,9 +210,16 @@ export default function InstallSequence({ part, onClose }: { part: RocketPart; o
 
       {fiction ? (
         <div className="space-y-3">
+          {verdict && (
+            <div className={`rounded-lg border bg-space-800/80 px-3 py-2 text-sm font-semibold ${verdict.cls}`}>
+              {verdict.icon} {verdict.headline}
+            </div>
+          )}
           <div className="rounded-lg border border-cyan-500/30 bg-space-800/80 px-3 py-2 text-sm text-cyan-100 italic">⚙️ {fiction}</div>
           <div className="text-[11px] text-slate-500">
-            The gauge shows what you set — the launch will show whether it was right. Sharp-eyed engineers can re-do a step before flight.
+            {verdict?.tone === "wobbly" || verdict?.tone === "bad"
+              ? "You can re-do this step now (−1 🔩) — or fly it as-built and see what happens."
+              : "The exact numbers get checked at launch — the investigation shows your value vs spec."}
           </div>
           <div className="flex gap-2">
             <button

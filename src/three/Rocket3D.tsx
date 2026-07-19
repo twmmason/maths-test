@@ -84,8 +84,8 @@ function Part({ part, draft, selected, level = 1, interactive, onSelect, childre
       ior={1.5}
       transparent={isTransparent}
       opacity={draft ? 0.28 : base.opacity ?? 1}
-      emissive={selected ? "#22d3ee" : hovered && interactive ? "#22d3ee" : draft ? "#fbbf24" : level >= 3 ? "#22d3ee" : "#000000"}
-      emissiveIntensity={selected ? 0.45 : hovered && interactive ? 0.3 : draft ? 0.25 : level >= 3 ? 0.12 : 0}
+      emissive={selected ? "#22d3ee" : hovered && interactive ? "#22d3ee" : draft ? "#fbbf24" : "#000000"}
+      emissiveIntensity={selected ? 0.45 : hovered && interactive ? 0.3 : draft ? 0.25 : 0}
     />
   );
   return (
