@@ -7,6 +7,8 @@ type Mode = "cad" | "fast" | "quality";
 interface Props {
   getCanvas: () => HTMLCanvasElement | null;
   siteName: string;
+  /** Terrain tag for the photo prompt (coastal/steppe/jungle/island). */
+  siteTerrain?: string;
   /** Called with the resulting image (AI repaint, or plain screenshot fallback). */
   onPhoto?: (dataUrl: string) => void;
   /** Called with the current mode so the parent can e.g. stop camera rotation. */
@@ -18,7 +20,7 @@ export interface ViewSwitcherHandle {
 }
 
 /** Mission Camera pill: Workshop (live 3D) / Photo (fast repaint) / Poster (quality repaint). */
-const ViewSwitcher = forwardRef<ViewSwitcherHandle, Props>(function ViewSwitcher({ getCanvas, siteName, onPhoto, onModeChange }, ref) {
+const ViewSwitcher = forwardRef<ViewSwitcherHandle, Props>(function ViewSwitcher({ getCanvas, siteName, siteTerrain, onPhoto, onModeChange }, ref) {
   const [mode, setMode] = useState<Mode>("cad");
   const [style, setStyle] = useState<RenderStyle>("photorealistic");
   const [overlay, setOverlay] = useState<string | null>(null);
@@ -37,7 +39,7 @@ const ViewSwitcher = forwardRef<ViewSwitcherHandle, Props>(function ViewSwitcher
     onModeChange?.(m);
     setBusy(true);
     const screenshot = canvas.toDataURL("image/png");
-    const painted = hasKey() ? await generateMissionPhoto(screenshot, m === "fast" ? "fast" : "quality", style, siteName) : null;
+    const painted = hasKey() ? await generateMissionPhoto(screenshot, m === "fast" ? "fast" : "quality", style, siteName, siteTerrain) : null;
     const result = painted ?? screenshot; // no key/network → plain screenshot
     setOverlay(result);
     onPhoto?.(result);

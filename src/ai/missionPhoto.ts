@@ -40,6 +40,7 @@ export async function generateMissionPhoto(
   quality: "fast" | "quality",
   style: RenderStyle,
   siteName: string,
+  terrain?: string,
 ): Promise<string | null> {
   const client = getClient();
   if (!client) return null;
@@ -49,7 +50,19 @@ export async function generateMissionPhoto(
   const base64 = resized.split(",")[1];
   if (!base64) return null;
 
-  const prompt = `Repaint this 3D render of a child's rocket on the launch pad at ${siteName} as a ${style.replace("-", " ")} photograph. Keep the rocket's shape, parts and colours exactly as shown.`;
+  const terrainHint: Record<string, string> = {
+    coastal: "on a concrete pad near the ocean coast, with sea and shoreline visible in the background",
+    steppe: "on a vast flat steppe plain, brown grasslands stretching to the horizon",
+    jungle: "surrounded by dense tropical jungle, lush green canopy in the background",
+    island: "on a small coastal island, green cliffs and sea visible around the pad",
+  };
+  const bgHint = terrainHint[terrain ?? "coastal"] ?? "on a launch pad";
+  const prompt = [
+    `Repaint this 3D render as a ${style.replace("-", " ")} photograph of a child's rocket ${bgHint} at ${siteName}.`,
+    "CRITICAL: Keep the rocket's exact shape, proportions, parts and colours — only repaint the rendering style.",
+    "CRITICAL: Keep the background terrain, sky and surroundings exactly as shown in the original image — do NOT change the location, landscape or horizon.",
+    "The rocket should look like a real physical object sitting in the real location shown.",
+  ].join(" ");
 
   const call = async () => {
     const res = await client.models.generateContent({

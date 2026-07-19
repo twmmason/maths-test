@@ -130,11 +130,13 @@ export default function HangarPage() {
           className="absolute inset-0 z-20"
           onPointerDown={() => {
             // Dismiss the photo so the live 3D is visible while dragging.
-            // A window-level pointerup listener triggers re-capture from the new angle.
             setPhotoOverlay(null);
+            const downTime = Date.now();
             const onUp = () => {
               window.removeEventListener("pointerup", onUp);
-              if (lastPhotoMode.current) {
+              // Only re-render if the user actually dragged (held > 250ms).
+              // A quick click just dismisses the photo without re-triggering.
+              if (Date.now() - downTime > 250 && lastPhotoMode.current) {
                 setPhotoBusy(true);
                 setTimeout(() => viewSwitcherRef.current?.recapture(), 300);
               }
@@ -152,6 +154,7 @@ export default function HangarPage() {
           ref={viewSwitcherRef}
           getCanvas={() => canvasRef.current}
           siteName={site.name}
+          siteTerrain={site.terrain}
           onModeChange={(m) => {
             setPhotoMode(m !== "cad");
             if (m === "cad") {
