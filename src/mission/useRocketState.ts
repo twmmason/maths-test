@@ -3,7 +3,7 @@ import type { RocketPart } from "../curriculum/types";
 import { emptyDesign, upgradeDesign, integrityFromSteps, type RocketDesign, type InstallStepResult } from "../three/rocketDesign";
 import { db, attemptsFor, type Profile, type Attempt } from "../db/db";
 import { loadActiveProfile, getActiveProfileId, clearActiveProfileId } from "../db/seed";
-import { xpForAttempt, computeMastery, masteryPercent, isAcademyUnlocked, allPartLevels } from "../engine/mastery";
+import { xpForAttempt, computeMastery, masteryPercent, masteryProgressPercent, isAcademyUnlocked, allPartLevels } from "../engine/mastery";
 import { planPart, type PartPlan } from "./runPlanner";
 import { VARIANT_BY_ID, type PartVariant } from "./partsCatalog";
 import type { FlightResult } from "../physics/types";
@@ -23,6 +23,8 @@ export interface RocketState {
   tasksCorrect: number;
   tasksTotal: number;
   masteryPct: number;
+  /** Friendlier 0..1 progress with partial credit (hangar readout). */
+  masteryProgressPct: number;
   /** KS3 Academy mastery fraction (0..1). */
   ks3MasteryPct: number;
   /** Astronaut Academy open (60% KS2 mastery OR Year 7+ profile toggle). */
@@ -90,6 +92,7 @@ export const useRocketState = create<RocketState>((set, get) => ({
   tasksCorrect: 0,
   tasksTotal: 0,
   masteryPct: 0,
+  masteryProgressPct: 0,
   ks3MasteryPct: 0,
   academyOpen: false,
   lastFlight: null,
@@ -120,6 +123,7 @@ export const useRocketState = create<RocketState>((set, get) => ({
       tasksCorrect: saved?.tasksCorrect ?? 0,
       tasksTotal: saved?.tasksTotal ?? 0,
       masteryPct: masteryPercent(computeMastery(attempts)),
+      masteryProgressPct: masteryProgressPercent(computeMastery(attempts)),
       ks3MasteryPct: masteryPercent(computeMastery(attempts), "ks3"),
       academyOpen: isAcademyUnlocked(computeMastery(attempts), profile.academyUnlocked),
     });
@@ -297,6 +301,7 @@ export const useRocketState = create<RocketState>((set, get) => ({
     const mastery = computeMastery(attempts);
     set({
       masteryPct: masteryPercent(mastery),
+      masteryProgressPct: masteryProgressPercent(mastery),
       ks3MasteryPct: masteryPercent(mastery, "ks3"),
       academyOpen: isAcademyUnlocked(mastery, profile?.academyUnlocked),
     });
@@ -331,6 +336,7 @@ export const useRocketState = create<RocketState>((set, get) => ({
       tasksCorrect: 0,
       tasksTotal: 0,
       masteryPct: 0,
+      masteryProgressPct: 0,
       lastFlight: null,
       lastMissionId: null,
       lastNewPatches: [],

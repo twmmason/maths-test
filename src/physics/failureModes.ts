@@ -88,6 +88,61 @@ const fmt = (n: number, dp = 1) => Number(n.toFixed(dp)).toString();
  */
 export function deriveFailurePlan(design: RocketDesign): PlannedFailure[] {
   const plan: PlannedFailure[] = [];
+  const missing = (part: RocketPart) => !design.installedParts[part];
+
+  // 0. Missing parts — the rocket flies EXACTLY as built. A part that was
+  // never fitted in the VAB produces its own disaster (or stops the count).
+  if (missing("electronics")) {
+    plan.push({
+      mode: "padAbort", severity: "failure", trigger: "pad",
+      partAtFault: "electronics", stepId: "electronics.wiring",
+      caption: "HOLD HOLD HOLD — NO GUIDANCE COMPUTER FITTED",
+      explanation: "There is no electronics bay on this vehicle — nothing to steer it. The pad computer refused to start the count.",
+    });
+    return plan;
+  }
+  if (missing("engine")) {
+    plan.push({
+      mode: "cantLiftOff", severity: "failure", trigger: "pad",
+      partAtFault: "engine", stepId: "engine.thrustTrim",
+      caption: "IGNITION COMMAND… SILENCE — NO ENGINE FITTED",
+      explanation: "The ignition command went out, but there was no engine on the vehicle to answer it. Zero thrust, zero liftoff.",
+    });
+    return plan;
+  }
+  if (missing("fuelTank")) {
+    plan.push({
+      mode: "cantLiftOff", severity: "failure", trigger: "pad",
+      partAtFault: "fuelTank", stepId: "fuelTank.fillVolume",
+      caption: "ENGINES SPUTTER AND DIE — NO FUEL TANK FITTED",
+      explanation: "The engines lit on residual line pressure for half a second — there was no fuel tank to feed them.",
+    });
+    return plan;
+  }
+  if (missing("hull")) {
+    plan.push({
+      mode: "hullBreakup", severity: "catastrophic", trigger: "maxQ",
+      partAtFault: "hull", stepId: "hull.boltSpacing",
+      caption: "MAX-Q — VEHICLE BREAKUP (NO HULL PANELS FITTED)",
+      explanation: "With no hull panels fitted, the airframe had nothing holding it together — it came apart the moment aerodynamic pressure built.",
+    });
+  }
+  if (missing("fins")) {
+    plan.push({
+      mode: "finShatter", severity: "catastrophic", trigger: "maxQ",
+      partAtFault: "fins", stepId: "fins.cantAngle",
+      caption: "MAX-Q — VEHICLE TUMBLE (NO FINS FITTED)",
+      explanation: "No fins were ever fitted, so there was nothing keeping the vehicle pointed the right way — it tumbled end over end as the air got thick.",
+    });
+  }
+  if (missing("noseCone")) {
+    plan.push({
+      mode: "noseShatter", severity: "failure", trigger: "maxQ",
+      partAtFault: "noseCone", stepId: "noseCone.coneAngle",
+      caption: "MAX-Q — DRAG SPIKE (NO NOSE CONE FITTED)",
+      explanation: "The vehicle flew with a flat open top — a blunt face into the airflow. Drag spiked at max-Q and ate the climb.",
+    });
+  }
 
   // 1. Critical electronics error ⇒ pad abort (checked FIRST — no launch at all).
   const wiring = stepFor(design, "electronics", "electronics.wiring");

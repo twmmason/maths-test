@@ -16,6 +16,7 @@ export default function HangarPage() {
   const destinationId = useRocketState((s) => s.destinationId);
   const setDestination = useRocketState((s) => s.setDestination);
   const masteryPct = useRocketState((s) => s.masteryPct);
+  const masteryProgressPct = useRocketState((s) => s.masteryProgressPct);
   const ks3MasteryPct = useRocketState((s) => s.ks3MasteryPct);
   const academyOpen = useRocketState((s) => s.academyOpen);
   const [showSites, setShowSites] = useState(false);
@@ -132,7 +133,7 @@ export default function HangarPage() {
           <div className="text-xs text-slate-300 space-y-1">
             <div>⭐ {profile?.xp ?? 0} XP</div>
             <div>🔥 {profile?.launchStreak ?? 0} day launch streak</div>
-            <div>🎯 {Math.round(masteryPct * 100)}% curriculum mastered</div>
+            <div>🎯 {masteryProgressPct > 0 ? Math.max(1, Math.round(masteryProgressPct * 100)) : 0}% curriculum progress</div>
           </div>
           {profile && profile.patches.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">

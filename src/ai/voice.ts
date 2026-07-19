@@ -20,17 +20,19 @@ const SAMPLE_RATE = 24_000;
 
 export type VoiceRole = "flightDirector" | "rso" | "commander";
 
-/** Single shared voice — every character speaks with the same voice. */
-const SHARED_VOICE = "Puck";
+/** Single shared voice — every character speaks with the same voice.
+ *  "Charon" is Gemini's deep, low male voice (was "Puck", which is lighter). */
+const SHARED_VOICE = "Charon";
 
 /**
  * Voice registry — all roles use the same prebuilt Gemini voice; only the
  * natural-language delivery directive differs per role.
  */
+const DEEP_STYLE = "Say in a deep, low, unhurried voice — a gravelly veteran mission-control announcer";
 const VOICE_FOR_ROLE: Record<VoiceRole, { voiceName: string; style: string; rate: number }> = {
-  flightDirector: { voiceName: SHARED_VOICE, style: "Say like a calm, upbeat NASA launch commentator", rate: 1.0 },
-  rso: { voiceName: SHARED_VOICE, style: "Say like a calm, upbeat NASA launch commentator", rate: 1.0 },
-  commander: { voiceName: SHARED_VOICE, style: "Say like a calm, upbeat NASA launch commentator", rate: 1.0 },
+  flightDirector: { voiceName: SHARED_VOICE, style: DEEP_STYLE, rate: 0.95 },
+  rso: { voiceName: SHARED_VOICE, style: DEEP_STYLE, rate: 0.95 },
+  commander: { voiceName: SHARED_VOICE, style: DEEP_STYLE, rate: 0.95 },
 };
 
 /** Strip characters that read badly aloud (scios `_sanitize_for_tts`). */
@@ -126,8 +128,12 @@ function speakFallback(text: string, role: VoiceRole) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
   const u = new SpeechSynthesisUtterance(text);
   u.rate = VOICE_FOR_ROLE[role].rate;
-  u.pitch = 1;
+  u.pitch = 0.7; // deeper male fallback
   u.lang = "en-GB";
+  // Prefer a deep UK male system voice when available (e.g. Daniel on macOS).
+  const voices = window.speechSynthesis.getVoices();
+  const deep = voices.find((v) => /daniel/i.test(v.name)) ?? voices.find((v) => v.lang === "en-GB" && /male/i.test(v.name)) ?? voices.find((v) => v.lang === "en-GB");
+  if (deep) u.voice = deep;
   window.speechSynthesis.speak(u);
 }
 

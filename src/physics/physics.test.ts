@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { computePerformance } from "./computePerformance";
 import { simulateFlight } from "./simulateFlight";
-import { DEFAULT_DESIGN, type RocketDesign } from "../three/rocketDesign";
+import { DEFAULT_DESIGN, withAllPartsInstalled, type RocketDesign } from "../three/rocketDesign";
 
-const design = (patch: Partial<RocketDesign> = {}): RocketDesign => ({ ...DEFAULT_DESIGN, ...patch });
+const design = (patch: Partial<RocketDesign> = {}): RocketDesign => withAllPartsInstalled({ ...DEFAULT_DESIGN, ...patch });
 
 describe("computePerformance", () => {
   it("default design is flight-ready with sensible TWR", () => {

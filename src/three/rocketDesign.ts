@@ -89,6 +89,21 @@ export function emptyDesign(): RocketDesign {
   return { ...DEFAULT_DESIGN, installedParts: {} };
 }
 
+/** A design with every core part fitted (plus boosters when boosterCount > 0).
+ *  The sim flies EXACTLY what was built — missing parts cause failures — so
+ *  tests / sandbox baselines start from a fully-assembled vehicle. */
+export function withAllPartsInstalled(design: RocketDesign): RocketDesign {
+  const parts: RocketPart[] = ["engine", "fuelTank", "hull", "fins", "noseCone", "electronics", "payloadBay"];
+  if (design.boosterCount > 0) parts.push("booster");
+  const installedParts: RocketDesign["installedParts"] = { ...design.installedParts };
+  for (const p of parts) {
+    if (!installedParts[p]) {
+      installedParts[p] = { variantId: `${p}-default`, certified: true, attachment: p === "booster" ? "radial" : "stack" };
+    }
+  }
+  return { ...design, installedParts };
+}
+
 /** Older saved designs may miss the Wrench Time fields — fill defaults. */
 export function upgradeDesign(design: RocketDesign): RocketDesign {
   return {

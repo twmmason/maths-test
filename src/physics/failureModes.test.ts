@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { simulateFlight } from "./simulateFlight";
 import { deriveFailurePlan } from "./failureModes";
-import { DEFAULT_DESIGN, type RocketDesign, type InstallStepResult } from "../three/rocketDesign";
+import { DEFAULT_DESIGN, withAllPartsInstalled, type RocketDesign, type InstallStepResult } from "../three/rocketDesign";
 import type { RocketPart } from "../curriculum/types";
 
-const design = (patch: Partial<RocketDesign> = {}): RocketDesign => ({ ...DEFAULT_DESIGN, ...patch });
+const design = (patch: Partial<RocketDesign> = {}): RocketDesign => withAllPartsInstalled({ ...DEFAULT_DESIGN, ...patch });
 
 /** Attach a part with one recorded install step (what the player's maths wrote). */
 function withStep(

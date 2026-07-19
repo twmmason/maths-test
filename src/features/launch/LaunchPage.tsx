@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import RocketScene from "../../three/RocketScene";
+import RocketScene, { VEHICLE_SCALE } from "../../three/RocketScene";
 import Rocket3D from "../../three/Rocket3D";
 import { useRocketState } from "../../mission/useRocketState";
 import { SITE_BY_ID } from "../../mission/launchSites";
@@ -20,75 +20,125 @@ import type { RocketPart } from "../../curriculum/types";
  *  near the pad the replay runs ~real time; higher up it fast-forwards, and
  *  the HUD shows the warp factor so the T+ clock and altitude stay honest. */
 function warpFor(altKm: number): number {
-  if (altKm < 2) return 2;
-  if (altKm < 15) return 8;
-  if (altKm < 80) return 16;
-  if (altKm < 400) return 40;
-  return 120;
+  if (altKm < 2) return 1;
+  if (altKm < 15) return 3;
+  if (altKm < 80) return 8;
+  if (altKm < 400) return 20;
+  return 60;
 }
 
 type Phase = "ready" | "countdown" | "flight" | "done" | "abort";
 
-/** Layered emissive sphere burst + spark particles + tumbling debris made of
- *  simple part-shaped meshes — the cartoon-boom for catastrophic failures. */
+/** Layered emissive fireball bursts + shockwave ring + billowing smoke +
+ *  flaming tumbling debris — the cartoon-boom for catastrophic failures. */
 function ExplosionFX({ y, drift, startT, clockRef }: { y: number; drift: number; startT: number; clockRef: React.MutableRefObject<{ t: number; altKm: number; y: number }> }) {
   const core = useRef<THREE.Mesh>(null);
   const mid = useRef<THREE.Mesh>(null);
   const outer = useRef<THREE.Mesh>(null);
+  const second = useRef<THREE.Mesh>(null);
+  const ring = useRef<THREE.Mesh>(null);
+  const light = useRef<THREE.PointLight>(null);
   const debris = useRef<THREE.Group>(null);
+  const smoke = useRef<THREE.Group>(null);
   // Deterministic debris directions (the design decides the failure; this is cosmetic).
   const [chunks] = useState(() =>
-    Array.from({ length: 14 }, (_, i) => ({
-      dir: new THREE.Vector3(Math.sin(i * 2.4), Math.abs(Math.cos(i * 1.7)) * 0.8 + 0.2, Math.cos(i * 3.1)).normalize(),
-      speed: 3 + (i % 5),
-      spin: 2 + (i % 3) * 2,
+    Array.from({ length: 26 }, (_, i) => ({
+      dir: new THREE.Vector3(Math.sin(i * 2.4) + Math.cos(i * 0.9) * 0.4, Math.abs(Math.cos(i * 1.7)) * 0.9 + 0.15, Math.cos(i * 3.1) + Math.sin(i * 1.3) * 0.4).normalize(),
+      speed: 4 + (i % 7) * 1.5,
+      spin: 2 + (i % 4) * 2,
       kind: i % 3, // 0 = panel, 1 = fin, 2 = cone
+    })),
+  );
+  const [puffs] = useState(() =>
+    Array.from({ length: 12 }, (_, i) => ({
+      dir: new THREE.Vector3(Math.sin(i * 1.9), 0.4 + Math.abs(Math.sin(i * 0.7)) * 0.7, Math.cos(i * 2.3)).normalize(),
+      speed: 1.5 + (i % 4) * 0.8,
+      size: 1.2 + (i % 3) * 0.8,
     })),
   );
   useFrame(() => {
     const age = Math.max(0, clockRef.current.t - startT);
-    const s = Math.min(1, age / 1.2);
+    const s = Math.min(1, age / 1.4);
     if (core.current) {
-      core.current.scale.setScalar(0.5 + s * 6);
-      (core.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - s * 1.1);
+      core.current.scale.setScalar(0.6 + s * 11);
+      (core.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - s * 1.15);
     }
     if (mid.current) {
-      mid.current.scale.setScalar(0.3 + s * 9);
-      (mid.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.7 - s * 0.8);
+      mid.current.scale.setScalar(0.4 + s * 16);
+      (mid.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.85 - s * 0.95);
     }
     if (outer.current) {
-      outer.current.scale.setScalar(0.2 + s * 13);
-      (outer.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.35 - s * 0.4);
+      outer.current.scale.setScalar(0.3 + s * 24);
+      (outer.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.45 - s * 0.5);
     }
+    // Secondary burst — the fuel goes up a beat after the airframe.
+    const s2 = Math.max(0, Math.min(1, (age - 0.35) / 1.2));
+    if (second.current) {
+      second.current.scale.setScalar(0.2 + s2 * 14);
+      (second.current.material as THREE.MeshBasicMaterial).opacity = s2 > 0 ? Math.max(0, 0.9 - s2 * 1.0) : 0;
+    }
+    // Expanding shockwave ring.
+    if (ring.current) {
+      ring.current.scale.setScalar(0.5 + s * 30);
+      (ring.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.5 - s * 0.55);
+    }
+    if (light.current) light.current.intensity = Math.max(0, 90 * (1 - s)) + (s2 > 0 ? 50 * (1 - s2) : 0);
     if (debris.current) {
       debris.current.children.forEach((c, i) => {
         const k = chunks[i];
-        c.position.set(k.dir.x * k.speed * age, k.dir.y * k.speed * age - 2 * age * age, k.dir.z * k.speed * age);
-        c.rotation.x += 0.05 * k.spin;
-        c.rotation.z += 0.04 * k.spin;
+        c.position.set(k.dir.x * k.speed * age, k.dir.y * k.speed * age - 3 * age * age, k.dir.z * k.speed * age);
+        c.rotation.x += 0.06 * k.spin;
+        c.rotation.z += 0.05 * k.spin;
+      });
+    }
+    // Smoke: billowing dark puffs that grow, drift up and linger (~6 s).
+    if (smoke.current) {
+      const sAge = Math.max(0, age - 0.2);
+      const fade = Math.max(0, 1 - sAge / 6);
+      smoke.current.children.forEach((c, i) => {
+        const p = puffs[i];
+        c.position.set(p.dir.x * p.speed * sAge, p.dir.y * p.speed * sAge + sAge * 0.8, p.dir.z * p.speed * sAge);
+        c.scale.setScalar(p.size * (0.4 + sAge * 1.1));
+        ((c as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity = 0.55 * fade;
       });
     }
   });
   return (
     <group position={[drift, y + 3, 0]}>
       <mesh ref={core}>
-        <sphereGeometry args={[1, 16, 16]} />
-        <meshBasicMaterial color="#fff7cc" transparent opacity={1} />
+        <sphereGeometry args={[1, 20, 20]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={1} depthWrite={false} />
       </mesh>
       <mesh ref={mid}>
-        <sphereGeometry args={[1, 16, 16]} />
-        <meshBasicMaterial color="#ffb347" transparent opacity={0.7} />
+        <sphereGeometry args={[1, 20, 20]} />
+        <meshBasicMaterial color="#ffb347" transparent opacity={0.85} depthWrite={false} />
       </mesh>
       <mesh ref={outer}>
-        <sphereGeometry args={[1, 16, 16]} />
-        <meshBasicMaterial color="#ff5d2e" transparent opacity={0.35} />
+        <sphereGeometry args={[1, 20, 20]} />
+        <meshBasicMaterial color="#ff4d1e" transparent opacity={0.45} depthWrite={false} />
       </mesh>
-      <pointLight color="#ffaa55" intensity={30} distance={60} decay={2} />
+      <mesh ref={second} position={[0.6, -1.2, 0.4]}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshBasicMaterial color="#ffd28a" transparent opacity={0} depthWrite={false} />
+      </mesh>
+      <mesh ref={ring} rotation={[Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.9, 1.1, 48]} />
+        <meshBasicMaterial color="#ffe9c4" transparent opacity={0.5} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      <pointLight ref={light} color="#ffaa55" intensity={90} distance={160} decay={2} />
+      <group ref={smoke}>
+        {puffs.map((_, i) => (
+          <mesh key={i}>
+            <sphereGeometry args={[1, 10, 10]} />
+            <meshStandardMaterial color="#2b2b30" transparent opacity={0.55} depthWrite={false} />
+          </mesh>
+        ))}
+      </group>
       <group ref={debris}>
         {chunks.map((k, i) => (
           <mesh key={i}>
             {k.kind === 0 ? <boxGeometry args={[0.5, 0.7, 0.06]} /> : k.kind === 1 ? <boxGeometry args={[0.05, 0.9, 0.6]} /> : <coneGeometry args={[0.3, 0.7, 8]} />}
-            <meshStandardMaterial color={k.kind === 1 ? "#e5484d" : "#cfd6e4"} emissive="#ff7733" emissiveIntensity={0.6} />
+            <meshStandardMaterial color={k.kind === 1 ? "#e5484d" : "#cfd6e4"} emissive="#ff7733" emissiveIntensity={1.4} />
           </mesh>
         ))}
       </group>
@@ -141,10 +191,11 @@ function FlyingRocket({
       const yEnd = Math.min(1200, Math.max(120, orbitAltKm)) * 1000;
       const y = orbitStartY.current + (yEnd - orbitStartY.current) * e;
       const a = state.clock.elapsedTime * 0.06;
-      const r = 30 * e;
+      const r = 30 * VEHICLE_SCALE * e;
       const x = Math.cos(a) * r;
       const z = Math.sin(a) * r;
-      group.current.position.set(x, y, z);
+      // clockRef carries WORLD coords; the group lives inside the scaled rig.
+      group.current.position.set(x / VEHICLE_SCALE, y / VEHICLE_SCALE, z / VEHICLE_SCALE);
       // gentle pitch-over to orbital attitude
       group.current.rotation.z = -0.9 * e;
       clockRef.current.y = y;
@@ -185,7 +236,7 @@ function FlyingRocket({
     // Scene y: log-ish scaling so the rocket visibly climbs then leaves frame
     // No cap — the camera director tracks the rocket at any height
     const y = alt * 3 + t * 0.4;
-    clockRef.current.y = y;
+    clockRef.current.y = y * VEHICLE_SCALE; // world-space (rocket rig is scaled)
     // Catastrophic moment: swap the rocket for the explosion + debris.
     if (catastrophe && t >= catastrophe.t && !exploded) {
       setExploded(true);
@@ -197,6 +248,7 @@ function FlyingRocket({
     shake.current = (Math.sin(t * 47) * 0.6 + Math.sin(t * 113) * 0.4) * shakeAmt;
     const shakeZ = (Math.sin(t * 71) * 0.5 + Math.cos(t * 97) * 0.5) * shakeAmt * 0.7;
     group.current.position.set(shake.current + driftScene, y, shakeZ);
+    clockRef.current.x = driftScene * VEHICLE_SCALE;
     // Veering rockets visibly lean into the drift.
     group.current.rotation.z = -Math.min(0.5, Math.abs(drift) * 0.4) * Math.sign(drift);
     const wantStaged = !!stagingEvent && t >= stagingEvent.t;
@@ -256,11 +308,12 @@ function OrbitRevealCam({
     const rx = clockRef.current.x ?? 0;
     const rz = clockRef.current.z ?? 0;
     const a = state.clock.elapsedTime * 0.05 + 1.2;
-    const target = new THREE.Vector3(rx + Math.cos(a) * 42, y + 10, rz + Math.sin(a) * 42);
+    const orbR = 42 * VEHICLE_SCALE;
+    const target = new THREE.Vector3(rx + Math.cos(a) * orbR, y + 10 * VEHICLE_SCALE, rz + Math.sin(a) * orbR);
     const k = 1 - Math.exp(-1.6 * dt);
     cam.position.lerp(target, k);
     // Look slightly below the rocket so the Earth's limb rides the frame.
-    cam.lookAt(rx, y - 8, rz);
+    cam.lookAt(rx, y - 8 * VEHICLE_SCALE, rz);
     cam.fov += (48 - cam.fov) * k;
     cam.updateProjectionMatrix();
   });
@@ -273,10 +326,11 @@ export const FREE_CAM = 5;
 /** Launch director: pick the shot from the rocket's ACTUAL simulated state —
  *  slow ascents naturally hold each shot longer (altitude-driven cuts). */
 function directShot(t: number, y: number): number {
-  if (t < 2 || y < 4) return 0; // pad cam — countdown + ignition
-  if (y < 22) return 1; // tower cam — clearing the gantry
-  if (y < 80) return 2; // ground tracking telephoto
-  if (y < 150) return 3; // chase cam through the clouds
+  // y is WORLD height; the vehicle rig is scaled by VEHICLE_SCALE.
+  if (t < 2 || y < 4 * VEHICLE_SCALE) return 0; // pad cam — countdown + ignition
+  if (y < 22 * VEHICLE_SCALE) return 1; // tower cam — clearing the gantry
+  if (y < 80 * VEHICLE_SCALE) return 2; // ground tracking telephoto
+  if (y < 150 * VEHICLE_SCALE) return 3; // chase cam through the clouds
   return 4; // orbit reveal
 }
 
@@ -301,7 +355,7 @@ function LaunchDirector({
   useFrame((state, dt) => {
     if (!active) return;
     const { t, y } = clockRef.current;
-    const rocketMid = new THREE.Vector3(0, y + 4, 0);
+    const rocketMid = new THREE.Vector3(0, y + 4 * VEHICLE_SCALE, 0);
     const shot = reducedMotion ? 2 : shotOverride ?? directShot(t, y);
     const cut = shot !== activeShot.current;
     if (cut) {
@@ -314,25 +368,26 @@ function LaunchDirector({
     const cam = state.camera as THREE.PerspectiveCamera;
     let targetPos: THREE.Vector3;
     let targetFov = 40;
+    const S = VEHICLE_SCALE;
     switch (shot) {
       case 0: // pad cam — low wide shot
-        targetPos = new THREE.Vector3(15, 2, 18);
+        targetPos = new THREE.Vector3(15 * S, 2 * S, 18 * S);
         targetFov = 45;
         break;
       case 1: // tower cam — close pass at the gantry
-        targetPos = new THREE.Vector3(6, 11, 7);
+        targetPos = new THREE.Vector3(6 * S, 11 * S, 7 * S);
         targetFov = 42;
         break;
       case 2: // ground tracking telephoto — planted press-site shot
-        targetPos = new THREE.Vector3(42, 2.5, 48);
-        targetFov = Math.max(10, 34 - y * 0.18);
+        targetPos = new THREE.Vector3(42 * S, 2.5 * S, 48 * S);
+        targetFov = Math.max(10, 34 - (y / S) * 0.18);
         break;
       case 3: // chase cam — alongside through the cloud layer
-        targetPos = new THREE.Vector3(8, y + 1, 10);
+        targetPos = new THREE.Vector3(8 * S, y + 1 * S, 10 * S);
         targetFov = 45;
         break;
       default: // orbit reveal — pull back as the sky turns black
-        targetPos = new THREE.Vector3(38, y + 14, 46);
+        targetPos = new THREE.Vector3(38 * S, y + 14 * S, 46 * S);
         targetFov = 50;
     }
 
@@ -348,9 +403,9 @@ function LaunchDirector({
     }
     // Rule-of-thirds: bias the framing so the rocket rides the lower third
     // with sky ahead of it — lead increases as it speeds away.
-    camLook.current.y += Math.min(6, 1.5 + y * 0.03) * k;
+    camLook.current.y += Math.min(6 * S, (1.5 + y * 0.03) * S) * k;
     // Never sink the camera below the pad apron.
-    camPos.current.y = Math.max(1.2, camPos.current.y);
+    camPos.current.y = Math.max(1.2 * S, camPos.current.y);
     // Camera shake: strong at ignition, medium during burn, off in coast
     const burnRatio = clockRef.current.t < 2 ? 1 : clockRef.current.altKm < 5 ? 0.6 : 0.15;
     const shakeIntensity = t < 2 ? 0.4 : t < clockRef.current.t && clockRef.current.t < 999 ? 0.12 * burnRatio : 0;
@@ -438,7 +493,15 @@ export default function LaunchPage() {
           setCaption(e.label);
           if (e.severity === "catastrophic") {
             sfx.explosion();
-            sfx.rso("We've lost the vehicle. The crew capsule escape tower worked perfectly, again.");
+            // The RSO explains WHY the vehicle was lost — the caption carries
+            // the deterministic cause (part, value vs spec).
+            const cause = e.label
+              .replace(/°/g, " degrees")
+              .replace(/[—–]/g, ",")
+              .replace(/[()]/g, ",")
+              .replace(/\s+/g, " ")
+              .trim();
+            sfx.rso(`We've lost the vehicle. Telemetry says: ${cause}. Crew capsule is safely away.`);
             setFlash(true);
             setTimeout(() => setFlash(false), 350);
           } else {
@@ -612,9 +675,13 @@ export default function LaunchPage() {
             className="pointer-events-auto text-2xl font-black rounded-2xl px-10 py-5 bg-red-600/80 hover:bg-red-500 border-2 border-red-300 shadow-glow transition"
             onClick={() => {
               if (flight.outcome === "padAbort") {
-                // Critical guidance fault: klaxons, no launch — aborts save rockets.
+                // Critical fault on the pad: klaxons, no launch — aborts save rockets.
                 sfx.klaxon();
-                sfx.rso("Hold hold hold. Guidance bus fault. The range is safe — nice catch by the pad computer.");
+                const abortCause = (flight.failures[0]?.label ?? "Guidance bus fault")
+                  .replace(/[—–]/g, ",")
+                  .replace(/\s+/g, " ")
+                  .toLowerCase();
+                sfx.rso(`Hold hold hold. ${abortCause}. The range is safe — nice catch by the pad computer.`);
                 void (async () => {
                   if (!savedRef.current) {
                     savedRef.current = true;
@@ -661,9 +728,9 @@ export default function LaunchPage() {
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-red-950/50 backdrop-blur-sm">
           <div className="hud-panel p-6 max-w-md w-full text-center space-y-3 border-2 border-red-400/70">
             <div className="text-5xl">🚨</div>
-            <h2 className="text-xl font-black text-red-300 neon">HOLD HOLD HOLD — PAD ABORT</h2>
+            <h2 className="text-xl font-black text-red-300 neon">{flight.failures[0]?.label ?? "HOLD HOLD HOLD — PAD ABORT"}</h2>
             <p className="text-sm text-slate-300">
-              The guidance bus failed its power-up self-test and the range safety officer stopped the count.
+              The range safety officer stopped the count.
               No fireworks today — <b className="text-emerald-300">an abort on the pad saves the whole rocket</b>.
             </p>
             <p className="text-xs text-amber-300">The crash investigation shows exactly which wire — and which maths — to fix.</p>

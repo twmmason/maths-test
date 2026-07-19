@@ -101,7 +101,8 @@ function Part({ part, draft, selected, level = 1, interactive, onSelect, childre
 
 export interface Rocket3DProps {
   design: RocketDesign;
-  /** Show every part regardless of assembly state (hangar / launch). */
+  /** Render installed parts solid (no draft ghosting). Parts that were never
+   *  fitted in the VAB are NEVER shown — the rocket flies exactly as built. */
   complete?: boolean;
   interactive?: boolean;
   selectedPart?: RocketPart | null;
@@ -124,7 +125,7 @@ export default function Rocket3D({
   const layout = rocketLayout(design);
   const r = design.hullRadius;
 
-  const isInstalled = (part: RocketPart) => complete || !!design.installedParts[part];
+  const isInstalled = (part: RocketPart) => !!design.installedParts[part];
   const isDraft = (part: RocketPart) => !complete && !!design.installedParts[part] && !design.installedParts[part]!.certified;
 
   const finPositions = useMemo(() => {

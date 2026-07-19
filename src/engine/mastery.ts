@@ -79,6 +79,24 @@ export function masteryPercent(mastery: Map<string, CriterionMastery>, keyStage:
   return mastered / pool.length;
 }
 
+/**
+ * Smoother 0..1 progress with partial credit for criteria on the WAY to
+ * mastery (mastery itself needs a 3-streak at tier ≥ 2, which takes ages —
+ * the hangar readout uses this so young players see the needle move).
+ */
+export function masteryProgressPercent(mastery: Map<string, CriterionMastery>, keyStage: KeyStage | "all" = "ks2"): number {
+  const pool = keyStage === "all" ? CRITERIA : criteriaForKeyStage(keyStage);
+  let sum = 0;
+  for (const c of pool) {
+    const m = mastery.get(c.code);
+    if (!m) continue;
+    if (m.mastered) sum += 1;
+    else if (m.streakT2 > 0) sum += Math.min(2, m.streakT2) / 3;
+    else if (m.correct > 0) sum += 0.2;
+  }
+  return sum / pool.length;
+}
+
 /** Mastered criterion count per strand (KS2 strands + KS3 domains). */
 export function strandMasteryCounts(mastery: Map<string, CriterionMastery>): Record<Strand, number> {
   const counts: Record<Strand, number> = {

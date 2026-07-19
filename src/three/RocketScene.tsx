@@ -7,6 +7,11 @@ import type { LaunchSite } from "../mission/launchSites";
 import { TERRAIN_COLORS } from "../mission/launchSites";
 import { GeoEnvironment, HAS_MAPS_KEY } from "./GeoEnvironment";
 
+/** Uniform scale-up of the rocket + pad so the vehicle reads at real launcher
+ *  size against the real-world 3D Tiles terrain (trees are 15–25 m; a 10 m
+ *  model rocket looked like a garden toy). All camera logic compensates. */
+export const VEHICLE_SCALE = 4;
+
 /** Gantry + pad. Retracts the tower when `towerRetracted`. */
 export function Launchpad({ site, towerRetracted = false, ground = true }: { site?: LaunchSite; towerRetracted?: boolean; ground?: boolean }) {
   const towerRef = useRef<THREE.Group>(null);
@@ -153,7 +158,7 @@ function FollowTarget({
     const c = controlsRef.current;
     const t = trackTarget.current;
     if (!c || !t) return;
-    c.target.set(t.x ?? 0, t.y + 4, t.z ?? 0);
+    c.target.set(t.x ?? 0, t.y + 4 * VEHICLE_SCALE, t.z ?? 0);
     c.update();
   });
   return null;
@@ -204,7 +209,7 @@ export default function RocketScene({
       shadows
       dpr={[1, 2]}
       gl={{ antialias: true, toneMapping: ACESFilmicToneMapping, preserveDrawingBuffer: true }}
-      camera={{ position: [9, 6, 11], fov: 40, near: 0.5, far: 2_500_000 }}
+      camera={{ position: [9 * VEHICLE_SCALE, 6 * VEHICLE_SCALE, 11 * VEHICLE_SCALE], fov: 40, near: 0.5, far: 2_500_000 }}
       onCreated={({ gl }) => {
         gl.domElement.addEventListener("webglcontextlost", (e) => e.preventDefault());
         onCanvasReady?.(gl.domElement);
@@ -213,8 +218,10 @@ export default function RocketScene({
       {geoActive && site ? (
         <Suspense fallback={null}>
           <GeoEnvironment site={site} solarHour={solarHour} clouds={!reducedMotion}>
-            {showPad && <Launchpad site={site} towerRetracted={towerRetracted} ground={false} />}
-            {children}
+            <group scale={VEHICLE_SCALE}>
+              {showPad && <Launchpad site={site} towerRetracted={towerRetracted} ground={false} />}
+              {children}
+            </group>
           </GeoEnvironment>
         </Suspense>
       ) : (
@@ -227,22 +234,26 @@ export default function RocketScene({
           <directionalLight position={[12, 18, 8]} intensity={2.2} castShadow shadow-mapSize={[1024, 1024]} />
           <Environment preset="city" background={false} environmentIntensity={0.6} />
           <Suspense fallback={null}>
-            {showPad && <Launchpad site={site} towerRetracted={towerRetracted} />}
-            {children}
+            <group scale={VEHICLE_SCALE}>
+              {showPad && <Launchpad site={site} towerRetracted={towerRetracted} />}
+              {children}
+            </group>
           </Suspense>
         </>
       )}
-      {controlsEnabled && <CameraRig focusY={focusY} distance={cameraDistance} controlsRef={controlsRef} />}
+      {controlsEnabled && (
+        <CameraRig focusY={focusY === null ? null : focusY * VEHICLE_SCALE} distance={cameraDistance * VEHICLE_SCALE} controlsRef={controlsRef} />
+      )}
       {controlsEnabled && (
         <OrbitControls
           ref={controlsRef}
           enablePan
           maxPolarAngle={Math.PI / 2 - 0.04}
-          minDistance={2}
+          minDistance={2 * VEHICLE_SCALE}
           maxDistance={1_000_000}
           autoRotate={autoRotate && !reducedMotion}
           autoRotateSpeed={0.6}
-          target={[0, 4, 0]}
+          target={[0, 4 * VEHICLE_SCALE, 0]}
         />
       )}
       {controlsEnabled && trackTarget && <FollowTarget controlsRef={controlsRef} trackTarget={trackTarget} />}
