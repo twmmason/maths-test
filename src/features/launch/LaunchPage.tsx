@@ -61,7 +61,8 @@ function FlyingRocket({
     }
     clockRef.current.altKm = alt;
     // Scene y: log-ish scaling so the rocket visibly climbs then leaves frame
-    const y = Math.min(180, alt * 3 + t * 0.4);
+    // No cap — the camera director tracks the rocket at any height
+    const y = alt * 3 + t * 0.4;
     clockRef.current.y = y;
     // Camera shake: strong rumble during burn, fading after cutoff
     const burnPhase = t < flight.burnoutT ? 1 : Math.max(0, 1 - (t - flight.burnoutT) * 0.5);
@@ -76,16 +77,52 @@ function FlyingRocket({
     setFlame(flameTarget);
   });
 
+  // Smoke cloud: expanding spheres that linger at the pad after ignition
+  const smokeT = playing ? clockRef.current.t : 0;
+
   return (
-    <group ref={group}>
-      <Rocket3D
-        design={design}
-        complete
-        engineFlame={playing ? flame : 0}
-        hideBoosters={staged}
-        partLevels={partLevels}
-      />
-    </group>
+    <>
+      <group ref={group}>
+        <Rocket3D
+          design={design}
+          complete
+          engineFlame={playing ? flame : 0}
+          hideBoosters={staged}
+          partLevels={partLevels}
+        />
+      </group>
+      {/* Pad exhaust smoke cloud — stays at y=0, expands and fades */}
+      {playing && smokeT < 12 && (
+        <group>
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+            const age = Math.max(0, smokeT - i * 0.3);
+            if (age <= 0) return null;
+            const r = 1.5 + age * 2.5;
+            const opacity = Math.max(0, 0.45 - age * 0.04);
+            const a = (i / 8) * Math.PI * 2;
+            const drift = age * 0.8;
+            return (
+              <mesh
+                key={i}
+                position={[
+                  Math.cos(a) * (2 + drift),
+                  0.5 + Math.sin(i * 2.3) * 0.4 + age * 0.3,
+                  Math.sin(a) * (2 + drift),
+                ]}
+              >
+                <sphereGeometry args={[r, 8, 8]} />
+                <meshStandardMaterial
+                  color="#d4cdc4"
+                  transparent
+                  opacity={opacity}
+                  depthWrite={false}
+                />
+              </mesh>
+            );
+          })}
+        </group>
+      )}
+    </>
   );
 }
 
