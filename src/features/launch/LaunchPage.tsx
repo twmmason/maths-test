@@ -15,7 +15,7 @@ import type { FlightResult } from "../../physics/types";
 import type { RocketDesign } from "../../three/rocketDesign";
 import type { RocketPart } from "../../curriculum/types";
 
-const PLAYBACK_SPEED = 6; // sim-seconds per real second
+const PLAYBACK_SPEED = 4; // sim-seconds per real second (slower = more dramatic)
 const MAX_PLAY_SECONDS = 18;
 
 type Phase = "ready" | "countdown" | "flight" | "done";
@@ -46,7 +46,7 @@ function FlyingRocket({
       group.current.position.y = 0;
       return;
     }
-    clockRef.current.t = Math.min(clockRef.current.t + dt * PLAYBACK_SPEED, flight.apogeeT);
+    clockRef.current.t = Math.min(clockRef.current.t + dt * PLAYBACK_SPEED, flight.samples[flight.samples.length - 1]?.t ?? flight.apogeeT);
     const t = clockRef.current.t;
     // Lerp between flight samples for smooth motion (no snapping)
     let alt = 0;
@@ -63,12 +63,17 @@ function FlyingRocket({
     // Scene y: log-ish scaling so the rocket visibly climbs then leaves frame
     const y = Math.min(180, alt * 3 + t * 0.4);
     clockRef.current.y = y;
-    shake.current = t < 4 ? Math.sin(t * 60) * 0.03 : 0;
-    group.current.position.set(shake.current, y, shake.current * 0.7);
+    // Camera shake: strong rumble during burn, fading after cutoff
+    const burnPhase = t < flight.burnoutT ? 1 : Math.max(0, 1 - (t - flight.burnoutT) * 0.5);
+    const shakeAmt = burnPhase * (t < 3 ? 0.12 : 0.05); // extra violent at ignition
+    shake.current = (Math.sin(t * 47) * 0.6 + Math.sin(t * 113) * 0.4) * shakeAmt;
+    const shakeZ = (Math.sin(t * 71) * 0.5 + Math.cos(t * 97) * 0.5) * shakeAmt * 0.7;
+    group.current.position.set(shake.current, y, shakeZ);
     const wantStaged = !!stagingEvent && t >= stagingEvent.t;
     if (wantStaged !== staged) setStaged(wantStaged);
-    const wantFlame = t < flight.burnoutT ? 1 : 0;
-    if (wantFlame !== flame) setFlame(wantFlame);
+    // Flame: ramp up at ignition, full during burn, rapid fade at cutoff
+    const flameTarget = t < 0.5 ? t * 2 : t < flight.burnoutT ? 1 : Math.max(0, 1 - (t - flight.burnoutT) * 3);
+    setFlame(flameTarget);
   });
 
   return (
@@ -152,11 +157,13 @@ function LaunchDirector({
     const k = 1 - Math.exp(-2.6 * dt);
     camPos.current.lerp(targetPos, k);
     camLook.current.lerp(rocketMid, Math.min(1, k * 2));
-    const igniteShake = t >= 0 && t < 2.5 ? 0.2 * (1 - t / 2.5) : 0;
+    // Camera shake: strong at ignition, medium during burn, off in coast
+    const burnRatio = clockRef.current.t < 2 ? 1 : clockRef.current.altKm < 5 ? 0.6 : 0.15;
+    const shakeIntensity = t < 2 ? 0.4 : t < clockRef.current.t && clockRef.current.t < 999 ? 0.12 * burnRatio : 0;
     cam.position.set(
-      camPos.current.x + (Math.random() - 0.5) * igniteShake,
-      camPos.current.y + (Math.random() - 0.5) * igniteShake,
-      camPos.current.z,
+      camPos.current.x + (Math.sin(t * 53) * 0.5 + Math.sin(t * 127) * 0.5) * shakeIntensity,
+      camPos.current.y + (Math.sin(t * 71) * 0.5 + Math.cos(t * 89) * 0.5) * shakeIntensity,
+      camPos.current.z + Math.sin(t * 97) * shakeIntensity * 0.3,
     );
     cam.lookAt(camLook.current);
     cam.fov += (targetFov - cam.fov) * k;

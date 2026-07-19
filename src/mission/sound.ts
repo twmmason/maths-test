@@ -63,24 +63,50 @@ export const sfx = {
   },
   nudge: () => beep(330, 0.12, "sine"),
   countdown: () => beep(880, 0.15, "square", 0.08),
-  /** Rocket launch rumble: low-frequency noise + rising tone. */
+  /** Rocket launch: layered rumble + crackle + rising roar (15 seconds). */
   launch: () => {
     const c = ensureCtx();
     if (!c || !enabled) return;
-    // Deep rumble noise
-    noise(8, 0.06, 180);
-    // Rising roar
-    const osc = c.createOscillator();
-    osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(60, c.currentTime);
-    osc.frequency.linearRampToValueAtTime(200, c.currentTime + 4);
-    const g = c.createGain();
-    g.gain.setValueAtTime(0.04, c.currentTime);
-    g.gain.linearRampToValueAtTime(0.08, c.currentTime + 2);
-    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 7);
-    osc.connect(g).connect(c.destination);
-    osc.start();
-    osc.stop(c.currentTime + 8);
+    const now = c.currentTime;
+
+    // Layer 1: deep ground-shaking rumble (40-120Hz)
+    noise(15, 0.1, 120);
+
+    // Layer 2: mid-frequency crackle (200-600Hz, modulated)
+    noise(12, 0.04, 500);
+
+    // Layer 3: rising roar tone (sawtooth 50→300Hz over 8s)
+    const osc1 = c.createOscillator();
+    osc1.type = "sawtooth";
+    osc1.frequency.setValueAtTime(50, now);
+    osc1.frequency.linearRampToValueAtTime(300, now + 8);
+    const g1 = c.createGain();
+    g1.gain.setValueAtTime(0.01, now);
+    g1.gain.linearRampToValueAtTime(0.07, now + 1.5);
+    g1.gain.setValueAtTime(0.07, now + 6);
+    g1.gain.exponentialRampToValueAtTime(0.001, now + 14);
+    osc1.connect(g1).connect(c.destination);
+    osc1.start(now);
+    osc1.stop(now + 15);
+
+    // Layer 4: high crackle shimmer (white noise 800-2000Hz)
+    const buf = c.createBuffer(1, c.sampleRate * 10, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const bp = c.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 1200;
+    bp.Q.value = 0.5;
+    const g2 = c.createGain();
+    g2.gain.setValueAtTime(0, now);
+    g2.gain.linearRampToValueAtTime(0.025, now + 2);
+    g2.gain.setValueAtTime(0.025, now + 5);
+    g2.gain.exponentialRampToValueAtTime(0.001, now + 12);
+    src.connect(bp).connect(g2).connect(c.destination);
+    src.start(now);
+    src.stop(now + 12);
   },
   /** Ambient pad wind (call stopWind to end). */
   startWind: () => {
