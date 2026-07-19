@@ -58,19 +58,42 @@ export function Launchpad({ site, towerRetracted = false, ground = true }: { sit
   );
 }
 
-/** Smoothly flies the camera toward a focus height on the rocket. */
+/** Smoothly flies the camera toward a focus height ONLY when focusY is set
+ *  (a part was clicked in the VAB). When focusY is null the camera is fully
+ *  user-controlled — no lerp, no override. This prevents the camera from
+ *  snapping back after the user zooms out. */
 function CameraRig({ focusY, distance = 12 }: { focusY: number | null; distance?: number }) {
   const { camera } = useThree();
   const target = useRef(new THREE.Vector3(0, 4, 0));
-  useFrame((state, dt) => {
-    const wantY = focusY === null ? 4 : focusY;
-    const wantDist = focusY === null ? distance : Math.max(6, distance * 0.6);
-    target.current.lerp(new THREE.Vector3(0, wantY, 0), Math.min(1, dt * 2.5));
+  const prevFocusY = useRef<number | null>(null);
+  const animating = useRef(false);
+  const progress = useRef(0);
+
+  useFrame((_, dt) => {
+    // Start animating only when focusY changes to a non-null value
+    if (focusY !== prevFocusY.current) {
+      prevFocusY.current = focusY;
+      if (focusY !== null) {
+        animating.current = true;
+        progress.current = 0;
+      } else {
+        animating.current = false;
+      }
+    }
+    if (!animating.current || focusY === null) return;
+
+    progress.current = Math.min(1, progress.current + dt * 2);
+    const t = progress.current;
+    const wantY = focusY;
+    const wantDist = Math.max(6, distance * 0.6);
+    target.current.lerp(new THREE.Vector3(0, wantY, 0), Math.min(1, dt * 3));
     const dir = new THREE.Vector3(camera.position.x, 0, camera.position.z).normalize();
     const wantPos = new THREE.Vector3(dir.x * wantDist, wantY + 2, dir.z * wantDist);
-    camera.position.lerp(wantPos, Math.min(1, dt * 1.8));
+    camera.position.lerp(wantPos, Math.min(1, dt * 2.5));
     camera.lookAt(target.current);
-    void state;
+
+    // Stop animating once we're close enough (don't fight the user)
+    if (t >= 1) animating.current = false;
   });
   return null;
 }
