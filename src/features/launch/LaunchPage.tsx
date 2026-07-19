@@ -13,10 +13,19 @@ import { sfx } from "../../mission/sound";
 import { useEffect as useEffectOnce } from "react";
 import type { FlightResult } from "../../physics/types";
 import type { RocketDesign } from "../../three/rocketDesign";
+
 import type { RocketPart } from "../../curriculum/types";
 
-const PLAYBACK_SPEED = 4; // sim-seconds per real second (slower = more dramatic)
-const MAX_PLAY_SECONDS = 18;
+/** Altitude-driven time-warp (like real launch broadcasts skipping ahead):
+ *  near the pad the replay runs ~real time; higher up it fast-forwards, and
+ *  the HUD shows the warp factor so the T+ clock and altitude stay honest. */
+function warpFor(altKm: number): number {
+  if (altKm < 2) return 2;
+  if (altKm < 15) return 8;
+  if (altKm < 80) return 16;
+  if (altKm < 400) return 40;
+  return 120;
+}
 
 type Phase = "ready" | "countdown" | "flight" | "done" | "abort";
 
@@ -94,12 +103,18 @@ function FlyingRocket({
   playing,
   clockRef,
   partLevels,
+  orbit = false,
+  orbitAltKm = 0,
 }: {
   design: RocketDesign;
   flight: FlightResult;
   playing: boolean;
-  clockRef: React.MutableRefObject<{ t: number; altKm: number; y: number }>;
+  clockRef: React.MutableRefObject<{ t: number; altKm: number; y: number; x?: number; z?: number; warp?: number }>;
   partLevels?: Partial<Record<RocketPart, 1 | 2 | 3>>;
+  /** After a successful orbital flight: coast the rocket up to REAL altitude
+   *  in the SAME world scene — the takram atmosphere handles space itself. */
+  orbit?: boolean;
+  orbitAltKm?: number;
 }) {
   const group = useRef<THREE.Group>(null);
   const shake = useRef(0);
@@ -110,13 +125,42 @@ function FlyingRocket({
   const [exploded, setExploded] = useState(false);
   const [boomState, setBoomState] = useState<{ y: number; drift: number } | null>(null);
 
-  useFrame((_, dt) => {
+  const orbitProg = useRef(0);
+  const orbitStartY = useRef<number | null>(null);
+
+  useFrame((state, dt) => {
     if (!group.current) return;
+    // Orbit coast: ease from the ascent's last height up to true altitude
+    // (metres) inside the one world scene — sky fades to black, the limb
+    // appears, all from the same atmosphere.
+    if (orbit) {
+      if (orbitStartY.current === null) orbitStartY.current = clockRef.current.y;
+      orbitProg.current = Math.min(1, orbitProg.current + dt / 8);
+      const p = orbitProg.current;
+      const e = p * p * (3 - 2 * p); // smoothstep
+      const yEnd = Math.min(1200, Math.max(120, orbitAltKm)) * 1000;
+      const y = orbitStartY.current + (yEnd - orbitStartY.current) * e;
+      const a = state.clock.elapsedTime * 0.06;
+      const r = 30 * e;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      group.current.position.set(x, y, z);
+      // gentle pitch-over to orbital attitude
+      group.current.rotation.z = -0.9 * e;
+      clockRef.current.y = y;
+      clockRef.current.x = x;
+      clockRef.current.z = z;
+      clockRef.current.altKm = y / 1000;
+      if (flame !== 0) setFlame(0);
+      return;
+    }
     if (!playing) {
       group.current.position.y = 0;
       return;
     }
-    clockRef.current.t = Math.min(clockRef.current.t + dt * PLAYBACK_SPEED, flight.samples[flight.samples.length - 1]?.t ?? flight.apogeeT);
+    const warp = warpFor(clockRef.current.altKm);
+    clockRef.current.warp = warp;
+    clockRef.current.t = Math.min(clockRef.current.t + dt * warp, flight.samples[flight.samples.length - 1]?.t ?? flight.apogeeT);
     const t = clockRef.current.t;
     // Lerp between flight samples for smooth motion (no snapping)
     let alt = 0;
@@ -196,7 +240,35 @@ function FlyingRocket({
   );
 }
 
-export const SHOT_NAMES = ["📺 Pad Cam", "📺 Tower Cam", "📺 Tracking Cam", "📺 Chase Cam", "📺 Orbit Cam"] as const;
+/** Orbit reveal camera — circles the coasting rocket inside the SAME world
+ *  scene; the takram atmosphere shows black space + the Earth's limb below. */
+function OrbitRevealCam({
+  clockRef,
+  active,
+}: {
+  clockRef: React.MutableRefObject<{ t: number; altKm: number; y: number; x?: number; z?: number }>;
+  active: boolean;
+}) {
+  useFrame((state, dt) => {
+    if (!active) return;
+    const cam = state.camera as THREE.PerspectiveCamera;
+    const { y } = clockRef.current;
+    const rx = clockRef.current.x ?? 0;
+    const rz = clockRef.current.z ?? 0;
+    const a = state.clock.elapsedTime * 0.05 + 1.2;
+    const target = new THREE.Vector3(rx + Math.cos(a) * 42, y + 10, rz + Math.sin(a) * 42);
+    const k = 1 - Math.exp(-1.6 * dt);
+    cam.position.lerp(target, k);
+    // Look slightly below the rocket so the Earth's limb rides the frame.
+    cam.lookAt(rx, y - 8, rz);
+    cam.fov += (48 - cam.fov) * k;
+    cam.updateProjectionMatrix();
+  });
+  return null;
+}
+
+export const SHOT_NAMES = ["📺 Pad Cam", "📺 Tower Cam", "📺 Tracking Cam", "📺 Chase Cam", "📺 Orbit Cam", "🎥 Free Cam (drag to look)"] as const;
+export const FREE_CAM = 5;
 
 /** Launch director: pick the shot from the rocket's ACTUAL simulated state —
  *  slow ascents naturally hold each shot longer (altitude-driven cuts). */
@@ -231,10 +303,13 @@ function LaunchDirector({
     const { t, y } = clockRef.current;
     const rocketMid = new THREE.Vector3(0, y + 4, 0);
     const shot = reducedMotion ? 2 : shotOverride ?? directShot(t, y);
-    if (shot !== activeShot.current) {
+    const cut = shot !== activeShot.current;
+    if (cut) {
       activeShot.current = shot;
       onShot(SHOT_NAMES[shot]);
     }
+    // Free Cam: hand control to OrbitControls — the director stands down.
+    if (shot === FREE_CAM) return;
 
     const cam = state.camera as THREE.PerspectiveCamera;
     let targetPos: THREE.Vector3;
@@ -261,9 +336,21 @@ function LaunchDirector({
         targetFov = 50;
     }
 
+    // Real broadcasts CUT between cameras (no impossible swooping moves):
+    // snap position + framing on a cut, damp only within the shot.
     const k = 1 - Math.exp(-2.6 * dt);
-    camPos.current.lerp(targetPos, k);
-    camLook.current.lerp(rocketMid, Math.min(1, k * 2));
+    if (cut) {
+      camPos.current.copy(targetPos);
+      camLook.current.copy(rocketMid);
+    } else {
+      camPos.current.lerp(targetPos, k);
+      camLook.current.lerp(rocketMid, Math.min(1, k * 2));
+    }
+    // Rule-of-thirds: bias the framing so the rocket rides the lower third
+    // with sky ahead of it — lead increases as it speeds away.
+    camLook.current.y += Math.min(6, 1.5 + y * 0.03) * k;
+    // Never sink the camera below the pad apron.
+    camPos.current.y = Math.max(1.2, camPos.current.y);
     // Camera shake: strong at ignition, medium during burn, off in coast
     const burnRatio = clockRef.current.t < 2 ? 1 : clockRef.current.altKm < 5 ? 0.6 : 0.15;
     const shakeIntensity = t < 2 ? 0.4 : t < clockRef.current.t && clockRef.current.t < 999 ? 0.12 * burnRatio : 0;
@@ -299,14 +386,17 @@ export default function LaunchPage() {
   }, []);
   const [count, setCount] = useState(3);
   const [altReadout, setAltReadout] = useState(0);
+  const [tPlus, setTPlus] = useState(0);
+  const [warpReadout, setWarpReadout] = useState(1);
   const [caption, setCaption] = useState<string | null>(null);
   const [flash, setFlash] = useState(false);
   const firedEvents = useRef(new Set<number>());
   const [recording, setRecording] = useState(false);
   const [shotOverride, setShotOverride] = useState<number | null>(null);
   const [shotLabel, setShotLabel] = useState("📺 Auto director");
+  const [userCam, setUserCam] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const clockRef = useRef({ t: 0, altKm: 0, y: 0 });
+  const clockRef = useRef<{ t: number; altKm: number; y: number; x?: number; z?: number; warp?: number }>({ t: 0, altKm: 0, y: 0 });
   const recorderRef = useRef<MediaRecorder | null>(null);
   const savedRef = useRef(false);
 
@@ -362,13 +452,14 @@ export default function LaunchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // Flight progress → done
+  // Flight progress → done (replay ends when the sim clock reaches the last
+  // sample — the warp is variable so this can't be a fixed timeout).
   useEffect(() => {
     if (phase !== "flight") return;
-    const readout = setInterval(() => setAltReadout(clockRef.current.altKm), 120);
-    const doneAfter = Math.min(MAX_PLAY_SECONDS, flight.apogeeT / PLAYBACK_SPEED + 2) * 1000;
-    const id = setTimeout(async () => {
-      clearInterval(readout);
+    const endT = flight.samples[flight.samples.length - 1]?.t ?? flight.apogeeT;
+    const started = Date.now();
+    let finishing = false;
+    const finishFlight = async () => {
       if (!savedRef.current) {
         savedRef.current = true;
         const screenshot = canvasRef.current?.toDataURL("image/png");
@@ -391,11 +482,17 @@ export default function LaunchPage() {
         await refreshProfile();
       }
       setPhase("done");
-    }, doneAfter);
-    return () => {
-      clearTimeout(id);
-      clearInterval(readout);
     };
+    const readout = setInterval(() => {
+      setAltReadout(clockRef.current.altKm);
+      setTPlus(clockRef.current.t);
+      setWarpReadout(clockRef.current.warp ?? 1);
+      if (!finishing && (clockRef.current.t >= endT - 0.01 || Date.now() - started > 60_000)) {
+        finishing = true;
+        setTimeout(() => void finishFlight(), 1500);
+      }
+    }, 120);
+    return () => clearInterval(readout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
@@ -425,16 +522,29 @@ export default function LaunchPage() {
   };
 
   const skyColor = phase === "flight" && altReadout > 40 ? "#05060f" : phase === "flight" && altReadout > 10 ? "#101a3f" : "#12204d";
+  // Show the true 3D orbit view only when an orbital altitude was genuinely reached.
+  const orbitView = phase === "done" && reached && flight.outcome !== "lostVehicle" && (dest?.requiredAltitudeKm ?? 0) >= 180;
+
+  // Any drag/scroll on the scene hands the camera to the user — even mid-launch.
+  // The free cam keeps tracking the rocket, but rotation & zoom are all theirs.
+  const takeCamera = () => {
+    if (phase === "flight" && shotOverride !== FREE_CAM) {
+      setShotOverride(FREE_CAM);
+      setShotLabel(SHOT_NAMES[FREE_CAM]);
+    }
+    if (orbitView && !userCam) setUserCam(true);
+  };
 
   return (
     <div className="relative h-full">
-      <div className="absolute inset-0">
+      <div className="absolute inset-0" onPointerDown={takeCamera} onWheel={takeCamera}>
         <RocketScene
           site={site}
           skyColor={skyColor}
           towerRetracted={phase !== "ready"}
           cameraDistance={16}
-          controlsEnabled={phase !== "flight"}
+          controlsEnabled={orbitView ? userCam : phase !== "flight" || shotOverride === FREE_CAM}
+          trackTarget={phase === "flight" || phase === "done" ? clockRef : null}
           onCanvasReady={(c) => (canvasRef.current = c)}
         >
           <FlyingRocket
@@ -443,6 +553,8 @@ export default function LaunchPage() {
             playing={phase === "flight" || phase === "done"}
             clockRef={clockRef}
             partLevels={profile?.partLevels}
+            orbit={orbitView}
+            orbitAltKm={flight.maxAltitudeKm}
           />
           <LaunchDirector
             clockRef={clockRef}
@@ -450,6 +562,7 @@ export default function LaunchPage() {
             shotOverride={shotOverride}
             onShot={(l) => setShotLabel(shotOverride === null ? `${l} (auto)` : l)}
           />
+          <OrbitRevealCam clockRef={clockRef} active={orbitView && !userCam} />
         </RocketScene>
       </div>
 
@@ -486,6 +599,10 @@ export default function LaunchPage() {
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 hud-panel px-6 py-2 z-10 text-center">
           <div className="text-2xl font-black text-cyan-200 neon tabular-nums">{altReadout < 1 ? `${Math.round(altReadout * 1000)} m` : `${altReadout.toFixed(1)} km`}</div>
           <div className="text-[10px] text-slate-400 uppercase tracking-widest">altitude</div>
+          <div className="text-[11px] text-slate-300 tabular-nums mt-0.5">
+            T+ {String(Math.floor(tPlus / 60)).padStart(2, "0")}:{String(Math.floor(tPlus % 60)).padStart(2, "0")}
+            {warpReadout > 2 && <span className="ml-2 text-amber-300">⏩ ×{warpReadout}</span>}
+          </div>
         </div>
       )}
 
@@ -563,8 +680,22 @@ export default function LaunchPage() {
         </div>
       )}
 
+      {/* Orbit achieved — SAME world scene, the camera simply follows the
+          rocket into space (earned by actually reaching orbital altitude) */}
+      {orbitView && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 hud-panel px-4 py-1.5 text-xs text-cyan-200">
+          🌍 Orbit achieved — same sky, just 400 km higher, Commander
+        </div>
+      )}
+
       {phase === "done" && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-space-950/60 backdrop-blur-sm">
+        <div
+          className={
+            orbitView
+              ? "absolute bottom-4 right-4 z-10 max-w-md w-full"
+              : "absolute inset-0 z-10 flex items-center justify-center bg-space-950/60 backdrop-blur-sm"
+          }
+        >
           <div className="hud-panel p-6 max-w-md w-full text-center space-y-3">
             <div className="text-5xl">{flight.outcome === "lostVehicle" ? "💥" : reached ? dest?.emoji : "🌤"}</div>
             <h2 className="text-xl font-black text-cyan-200 neon">

@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, OrbitControls, Stars } from "@react-three/drei";
-import { Suspense, useRef, type ReactNode } from "react";
+import { Suspense, useRef, type ReactNode, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { ACESFilmicToneMapping } from "three";
 import type { LaunchSite } from "../mission/launchSites";
@@ -132,6 +132,25 @@ function CameraRig({ focusY, distance = 12 }: { focusY: number | null; distance?
   return null;
 }
 
+/** Keeps OrbitControls aimed at a moving target (the flying rocket) while the
+ *  user stays free to rotate / zoom / pan around it. */
+function FollowTarget({
+  controlsRef,
+  trackTarget,
+}: {
+  controlsRef: MutableRefObject<any>;
+  trackTarget: MutableRefObject<{ y: number; x?: number; z?: number }>;
+}) {
+  useFrame(() => {
+    const c = controlsRef.current;
+    const t = trackTarget.current;
+    if (!c || !t) return;
+    c.target.set(t.x ?? 0, t.y + 4, t.z ?? 0);
+    c.update();
+  });
+  return null;
+}
+
 export interface RocketSceneProps {
   children: ReactNode;
   site?: LaunchSite;
@@ -148,6 +167,8 @@ export interface RocketSceneProps {
   solarHour?: number;
   /** Disable OrbitControls + CameraRig — the launch director drives the camera. */
   controlsEnabled?: boolean;
+  /** When set, OrbitControls follow this moving point (free-cam rocket tracking). */
+  trackTarget?: MutableRefObject<{ y: number; x?: number; z?: number }> | null;
   /** Volumetric exhaust smoke at pad level (launch mode). */
   exhaustSmoke?: boolean;
 }
@@ -165,15 +186,17 @@ export default function RocketScene({
   geo = true,
   solarHour,
   controlsEnabled = true,
+  trackTarget = null,
 }: RocketSceneProps) {
   const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const controlsRef = useRef<any>(null);
   const geoActive = geo && HAS_MAPS_KEY && Boolean(site);
   return (
     <Canvas
       shadows
       dpr={[1, 2]}
       gl={{ antialias: true, toneMapping: ACESFilmicToneMapping, preserveDrawingBuffer: true }}
-      camera={{ position: [9, 6, 11], fov: 40, near: 0.5, far: 80000 }}
+      camera={{ position: [9, 6, 11], fov: 40, near: 0.5, far: 2_500_000 }}
       onCreated={({ gl }) => {
         gl.domElement.addEventListener("webglcontextlost", (e) => e.preventDefault());
         onCanvasReady?.(gl.domElement);
@@ -194,7 +217,7 @@ export default function RocketScene({
           <ambientLight intensity={0.45} />
           <hemisphereLight intensity={0.35} color="#bfd8ff" groundColor="#33405e" />
           <directionalLight position={[12, 18, 8]} intensity={2.2} castShadow shadow-mapSize={[1024, 1024]} />
-          <Environment preset="dawn" background={false} environmentIntensity={0.6} />
+          <Environment preset="city" background={false} environmentIntensity={0.6} />
           <Suspense fallback={null}>
             {showPad && <Launchpad site={site} towerRetracted={towerRetracted} />}
             {children}
@@ -204,15 +227,17 @@ export default function RocketScene({
       {controlsEnabled && <CameraRig focusY={focusY} distance={cameraDistance} />}
       {controlsEnabled && (
         <OrbitControls
-          enablePan={false}
+          ref={controlsRef}
+          enablePan
           maxPolarAngle={Math.PI / 2 - 0.04}
-          minDistance={5}
-          maxDistance={45}
+          minDistance={2}
+          maxDistance={1_000_000}
           autoRotate={autoRotate && !reducedMotion}
           autoRotateSpeed={0.6}
           target={[0, 4, 0]}
         />
       )}
+      {controlsEnabled && trackTarget && <FollowTarget controlsRef={controlsRef} trackTarget={trackTarget} />}
     </Canvas>
   );
 }

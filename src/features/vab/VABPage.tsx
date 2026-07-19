@@ -5,7 +5,9 @@ import Rocket3D, { focusHeightFor } from "../../three/Rocket3D";
 import PartsTray from "./PartsTray";
 import StagePanel from "./StagePanel";
 import InstallSequence from "./InstallSequence";
+import TuningPanel from "./TuningPanel";
 import PerformancePanel from "../../components/PerformancePanel";
+import MissionTargetsPanel from "../../components/MissionTargetsPanel";
 import TaskRenderer from "../../components/TaskRenderer";
 import { useRocketState } from "../../mission/useRocketState";
 import { SITE_BY_ID } from "../../mission/launchSites";
@@ -26,6 +28,8 @@ export default function VABPage() {
   const selectPart = useRocketState((s) => s.selectPart);
   const installingPart = useRocketState((s) => s.installingPart);
   const setInstallingPart = useRocketState((s) => s.setInstallingPart);
+  const updateDesign = useRocketState((s) => s.updateDesign);
+  const adjustSpareParts = useRocketState((s) => s.adjustSpareParts);
   const resetBuild = useRocketState((s) => s.resetBuild);
   const [preflight, setPreflight] = useState(false);
 
@@ -130,6 +134,18 @@ export default function VABPage() {
       {/* Right column */}
       <div className="w-96 shrink-0 flex flex-col gap-3 overflow-auto">
         <PerformancePanel design={design} destinationId={destinationId} />
+        {profile && (
+          <MissionTargetsPanel profileId={profile.id} destinationId={destinationId} design={design} mode="next" />
+        )}
+        {selectedPart && design.installedParts[selectedPart]?.certified && (
+          <TuningPanel
+            part={selectedPart}
+            design={design}
+            onChange={(patch) => updateDesign(patch)}
+            spareParts={profile?.spareParts ?? 0}
+            onSpendToken={() => void adjustSpareParts(-1)}
+          />
+        )}
         <StagePanel />
         {!perf.flightReady && attached.length > 0 && (
           <div className="hud-panel p-3 text-xs text-amber-300">

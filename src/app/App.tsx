@@ -29,6 +29,8 @@ export default function App() {
 
   useEffect(() => {
     void init();
+    // Pre-warm the fixed launch callout voices (cached offline afterwards).
+    void import("../ai/voice").then(({ prewarmVoices }) => prewarmVoices());
   }, [init]);
 
   if (!ready) {

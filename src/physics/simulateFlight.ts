@@ -173,7 +173,12 @@ export function simulateFlight(design: RocketDesign, engineeringQuality = 1): Fl
       }
     }
     const dragN = perf.dragCoeff * 0.5 * airDensity * vel * Math.abs(vel) * (tumbled ? 8 : 1.2);
-    const accel = thrustN / Math.max(mass, 1) - G * Math.max(0, 1 - alt / 400000) - dragN / Math.max(mass, 1);
+    // Realistic acceleration in the atmosphere (~4 g max, like a real launch)
+    // so the altitude readout is believable; the cap relaxes above the
+    // atmosphere so far-flung game destinations stay reachable.
+    const thrustAccelCap = 40 * (1 + Math.pow(alt / 40000, 2));
+    const thrustAccel = Math.min(thrustN / Math.max(mass, 1), thrustAccelCap);
+    const accel = thrustAccel - G * Math.max(0, 1 - alt / 400000) - dragN / Math.max(mass, 1);
     vel += accel * dt;
     if (alt <= 0 && vel < 0) vel = 0;
     alt = Math.max(0, alt + vel * dt);

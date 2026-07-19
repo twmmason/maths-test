@@ -15,7 +15,8 @@
  * fallback still renders (error path, not the default).
  */
 
-import React, { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import React, { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import {
   Atmosphere,
@@ -227,27 +228,37 @@ export interface GeoEnvironmentProps {
  */
 export function GeoEnvironment({
   site,
-  solarHour = 16.5,
+  solarHour = 14,
   clouds = true,
   children,
 }: GeoEnvironmentProps) {
   const atmosphereRef = useRef<AtmosphereApi>(null);
-
-  // Rebase the atmosphere's ECEF frame onto the launch site + set sun time.
-  useEffect(() => {
-    const api = atmosphereRef.current;
-    if (!api) return;
+  const sunDate = useMemo(() => dateFromSolarHour(solarHour, site.lon), [solarHour, site.lon]);
+  const ecefMatrix = useMemo(() => {
     const position = new Geodetic(radians(site.lon), radians(site.lat), 0).toECEF(
       new THREE.Vector3(),
     );
-    Ellipsoid.WGS84.getNorthUpEastFrame(position, api.worldToECEFMatrix);
-    api.updateByDate(dateFromSolarHour(solarHour, site.lon));
-  }, [site.lat, site.lon, solarHour]);
+    return Ellipsoid.WGS84.getNorthUpEastFrame(position, new THREE.Matrix4());
+  }, [site.lat, site.lon]);
+
+  // Rebase the ECEF frame + set the sun EVERY frame. A one-shot effect can
+  // fire before the Atmosphere api / precomputed textures are ready, which
+  // leaves the matrix at identity — camera at the Earth's core, black sky,
+  // no sun. Re-applying per frame is cheap and always correct.
+  useFrame(() => {
+    const api = atmosphereRef.current;
+    if (!api) return;
+    api.worldToECEFMatrix.copy(ecefMatrix);
+    api.updateByDate(sunDate);
+  });
 
   return (
-    <Atmosphere ref={atmosphereRef} correctAltitude>
+    // `textures` points at the precomputed scattering tables bundled in
+    // /public/atmosphere — skips the GPU generator (which can fail silently
+    // → black sky) and works fully offline.
+    <Atmosphere ref={atmosphereRef} correctAltitude textures="/atmosphere">
       <Sky />
-      <AtmosphereStars />
+      <AtmosphereStars data="/atmosphere/stars.bin" />
       <SkyLight intensity={2} />
       {/* fill so shadowed faces don't collapse to black at rocket scale */}
       <hemisphereLight args={["#bcd3ee", "#8a7d68", 0.45]} />
@@ -266,13 +277,13 @@ export function GeoEnvironment({
       />
       <SiteTiles site={site} />
       {children}
-      {/* Env probe so the rocket meshPhysicalMaterial has reflections */}
-      <Environment preset="sunset" background={false} environmentIntensity={0.5} />
+      {/* Neutral env probe for rocket reflections (city = grey/blue — no
+          green-foliage tint on metallic parts) */}
+      <Environment preset="city" background={false} environmentIntensity={0.45} />
       <EffectComposer multisampling={0} enableNormalPass>
         {clouds ? (
-          <Clouds qualityPreset="low" coverage={0.32} localWeatherVelocity={[0.00005, 0]}>
+          <Clouds qualityPreset="low" coverage={0.34} localWeatherVelocity={[0.00005, 0]}>
             <CloudLayer altitude={1400} height={550} />
-
           </Clouds>
         ) : (
           <></>

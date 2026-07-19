@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import RocketScene from "../../three/RocketScene";
 import Rocket3D from "../../three/Rocket3D";
 import ViewSwitcher from "../../components/ViewSwitcher";
+import MissionTargetsPanel from "../../components/MissionTargetsPanel";
 import { useRocketState } from "../../mission/useRocketState";
 import { SITE_BY_ID } from "../../mission/launchSites";
 import { DESTINATION_BY_ID } from "../../mission/destinations";
@@ -166,6 +167,9 @@ export default function ReportPage() {
 
         {/* Right: report */}
         <div className="space-y-3">
+          {profile && (
+            <MissionTargetsPanel profileId={profile.id} destinationId={destinationId} design={design} flight={flight} mode="last" />
+          )}
           <div className="hud-panel p-4">
             <h1 className="text-xl font-black text-cyan-200 neon mb-1">
               {flight.outcome === "lostVehicle" || flight.outcome === "padAbort" ? "🕵️ Crash investigation" : "📋 After-action report"}

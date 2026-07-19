@@ -62,15 +62,13 @@ export const sfx = {
     setTimeout(() => beep(784, 0.14), 90);
   },
   nudge: () => beep(330, 0.12, "sine"),
-  /** Vocal countdown: speaks the number + beep tone. */
+  /** Vocal countdown: speaks the number + beep tone (Google TTS with fallback). */
   countdown: (n?: number) => {
     beep(880, 0.15, "square", 0.08);
-    if (typeof window !== "undefined" && "speechSynthesis" in window && n !== undefined) {
-      const u = new SpeechSynthesisUtterance(n === 0 ? "Liftoff!" : String(n));
-      u.rate = 1.2;
-      u.pitch = 0.9;
-      u.volume = 0.7;
-      window.speechSynthesis.speak(u);
+    if (n !== undefined) {
+      void import("../ai/voice").then(({ speak }) =>
+        speak(n === 0 ? "Liftoff! We have liftoff!" : n === 1 ? "One" : n === 2 ? "Two" : n === 3 ? "Three" : String(n), "flightDirector"),
+      );
     }
   },
   /** Rocket launch: ALL-NOISE design — no oscillators/tones. Real rocket sound
@@ -194,16 +192,10 @@ export const sfx = {
     osc.start(now);
     osc.stop(now + 1.5);
   },
-  /** Range Safety Officer callout via speech synthesis (jolly, no injuries). */
+  /** Range Safety Officer callout — Google TTS voice, speechSynthesis fallback. */
   rso: (line: string) => {
     if (!enabled) return;
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      const u = new SpeechSynthesisUtterance(line);
-      u.rate = 1.05;
-      u.pitch = 0.85;
-      u.volume = 0.7;
-      window.speechSynthesis.speak(u);
-    }
+    void import("../ai/voice").then(({ speak }) => speak(line, "rso"));
   },
   /** Ambient pad wind (call stopWind to end). */
   startWind: () => {
