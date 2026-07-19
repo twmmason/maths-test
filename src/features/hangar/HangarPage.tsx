@@ -20,6 +20,8 @@ export default function HangarPage() {
   const academyOpen = useRocketState((s) => s.academyOpen);
   const [showSites, setShowSites] = useState(false);
   const [photoMode, setPhotoMode] = useState(false);
+  const [photoOverlay, setPhotoOverlay] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // First visit: pick the launch site.
@@ -115,9 +117,33 @@ export default function HangarPage() {
         </div>
       </div>
 
-      {/* Mission camera */}
-      <div className="absolute bottom-4 right-4 z-10">
-        <ViewSwitcher getCanvas={() => canvasRef.current} siteName={site.name} onModeChange={(m) => setPhotoMode(m !== "cad")} />
+      {/* Photo overlay — full-screen over the canvas */}
+      {photoBusy && (
+        <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center">
+          <div className="hud-panel px-4 py-2 text-sm text-cyan-200 animate-pulse">developing photo… 📷</div>
+        </div>
+      )}
+      {photoOverlay && photoMode && !photoBusy && (
+        <div className="absolute inset-0 z-20 pointer-events-none">
+          <img src={photoOverlay} alt="Mission photo" className="w-full h-full object-cover" />
+        </div>
+      )}
+
+      {/* Mission camera pill */}
+      <div className="absolute bottom-4 right-4 z-30">
+        <ViewSwitcher
+          getCanvas={() => canvasRef.current}
+          siteName={site.name}
+          onModeChange={(m) => {
+            setPhotoMode(m !== "cad");
+            if (m === "cad") setPhotoOverlay(null);
+            else setPhotoBusy(true);
+          }}
+          onPhoto={(url) => {
+            setPhotoOverlay(url);
+            setPhotoBusy(false);
+          }}
+        />
       </div>
 
       {showSites && <SitePicker onClose={() => setShowSites(false)} />}

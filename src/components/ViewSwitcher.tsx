@@ -32,6 +32,7 @@ export default function ViewSwitcher({ getCanvas, siteName, onPhoto, onModeChang
     setOverlay(result);
     onPhoto?.(result);
     setBusy(false);
+    void overlay; // overlay state kept only for the parent callback
   };
 
   return (
@@ -74,15 +75,7 @@ export default function ViewSwitcher({ getCanvas, siteName, onPhoto, onModeChang
           </select>
         )}
       </div>
-      {(busy || overlay) && mode !== "cad" && (
-        <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
-          {busy ? (
-            <div className="hud-panel px-4 py-2 text-sm text-cyan-200 animate-pulse pointer-events-auto">developing photo… 📷</div>
-          ) : (
-            overlay && <img src={overlay} alt="Mission photo" className="w-full h-full object-cover" />
-          )}
-        </div>
-      )}
+
     </>
   );
 }
