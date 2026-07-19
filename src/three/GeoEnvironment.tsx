@@ -46,16 +46,7 @@ function dateFromSolarHour(hour: number, longitudeDeg: number, dayOfYear = 172):
   return new Date(base + (dayOfYear - 1) * 86_400_000 + utcHours * 3_600_000);
 }
 
-/** Estimate the WGS84 ellipsoidal height at a site (geoid undulation + terrain).
- *  Same formula as Gaudi's production fallback — works reliably for all launch
- *  sites without a backend elevation proxy. The 3d-tiles-renderer
- *  ReorientationPlugin uses this to place the tileset root at the right height. */
-function estimateEllipsoidHeight(lat: number): number {
-  const absLat = Math.abs(lat);
-  // WGS84 geoid undulation ranges from ~-100m to ~+85m globally.
-  // This polynomial approximation works within ~10m for mid-latitude sites.
-  return 10 + 0.9 * absLat - 0.004 * absLat * absLat;
-}
+
 
 /** Error boundary: a tiles crash silently unmounts + retries, never takes
  *  down the whole Canvas. */
@@ -93,7 +84,7 @@ const FADE_BAND = 6;
  *  dither-faded disc cleared around the launchpad. */
 function SiteTiles({ site }: { site: LaunchSite }) {
   const [disabled, setDisabled] = useState(false);
-  const height = estimateEllipsoidHeight(site.lat);
+  const height = site.ellipsoidHeight ?? 0;
 
   // Validate the key up front — the TilesRenderer fails silently otherwise.
   useEffect(() => {
