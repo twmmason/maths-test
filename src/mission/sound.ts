@@ -63,50 +63,52 @@ export const sfx = {
   },
   nudge: () => beep(330, 0.12, "sine"),
   countdown: () => beep(880, 0.15, "square", 0.08),
-  /** Rocket launch: layered rumble + crackle + rising roar (15 seconds). */
+  /** Rocket launch: ALL-NOISE design — no oscillators/tones. Real rocket sound
+   *  is broadband noise at different frequency bands with shaped envelopes.
+   *  Layers: sub-bass rumble, low roar, mid crackle, high sizzle. */
   launch: () => {
     const c = ensureCtx();
     if (!c || !enabled) return;
     const now = c.currentTime;
 
-    // Layer 1: deep ground-shaking rumble (40-120Hz)
-    noise(15, 0.1, 120);
+    // Helper: shaped noise burst at a frequency band
+    const noiseBand = (lo: number, hi: number, dur: number, vol: number, attackS: number, decayStart: number) => {
+      const len = c.sampleRate * dur;
+      const buf = c.createBuffer(1, len, c.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      const lp = c.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = hi;
+      const hp = c.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = lo;
+      const g = c.createGain();
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(vol, now + attackS);
+      g.gain.setValueAtTime(vol, now + decayStart);
+      g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      src.connect(hp).connect(lp).connect(g).connect(c.destination);
+      src.start(now);
+      src.stop(now + dur);
+    };
 
-    // Layer 2: mid-frequency crackle (200-600Hz, modulated)
-    noise(12, 0.04, 500);
+    // Sub-bass rumble (20-80Hz) — the ground-shaking thud you feel in your chest
+    noiseBand(20, 80, 18, 0.12, 0.8, 10);
 
-    // Layer 3: rising roar tone (sawtooth 50→300Hz over 8s)
-    const osc1 = c.createOscillator();
-    osc1.type = "sawtooth";
-    osc1.frequency.setValueAtTime(50, now);
-    osc1.frequency.linearRampToValueAtTime(300, now + 8);
-    const g1 = c.createGain();
-    g1.gain.setValueAtTime(0.01, now);
-    g1.gain.linearRampToValueAtTime(0.07, now + 1.5);
-    g1.gain.setValueAtTime(0.07, now + 6);
-    g1.gain.exponentialRampToValueAtTime(0.001, now + 14);
-    osc1.connect(g1).connect(c.destination);
-    osc1.start(now);
-    osc1.stop(now + 15);
+    // Low roar (60-250Hz) — the dominant "wall of sound" frequency
+    noiseBand(60, 250, 16, 0.09, 1.0, 8);
 
-    // Layer 4: high crackle shimmer (white noise 800-2000Hz)
-    const buf = c.createBuffer(1, c.sampleRate * 10, c.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    const src = c.createBufferSource();
-    src.buffer = buf;
-    const bp = c.createBiquadFilter();
-    bp.type = "bandpass";
-    bp.frequency.value = 1200;
-    bp.Q.value = 0.5;
-    const g2 = c.createGain();
-    g2.gain.setValueAtTime(0, now);
-    g2.gain.linearRampToValueAtTime(0.025, now + 2);
-    g2.gain.setValueAtTime(0.025, now + 5);
-    g2.gain.exponentialRampToValueAtTime(0.001, now + 12);
-    src.connect(bp).connect(g2).connect(c.destination);
-    src.start(now);
-    src.stop(now + 12);
+    // Mid crackle (200-800Hz) — the sharp crackling pops
+    noiseBand(200, 800, 14, 0.045, 1.5, 6);
+
+    // Upper crackle (600-2500Hz) — sizzling, popping texture
+    noiseBand(600, 2500, 12, 0.025, 2.0, 5);
+
+    // High sizzle (2000-6000Hz) — the airy top shimmer
+    noiseBand(2000, 6000, 10, 0.012, 2.5, 4);
   },
   /** Ambient pad wind (call stopWind to end). */
   startWind: () => {
