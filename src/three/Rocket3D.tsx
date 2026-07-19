@@ -44,6 +44,27 @@ interface PartProps {
   children: (material: ReactElement) => ReactElement;
 }
 
+/** Procedural panel-line normal map via canvas (cached globally). */
+const panelNormalMap = (() => {
+  if (typeof document === "undefined") return null;
+  const size = 256;
+  const c = document.createElement("canvas");
+  c.width = size; c.height = size;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "#8080ff";
+  ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = "#7070e0";
+  ctx.lineWidth = 1.5;
+  for (let y = 0; y < size; y += 28) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(size, y); ctx.stroke(); }
+  for (let x = 0; x < size; x += 56) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, size); ctx.stroke(); }
+  ctx.fillStyle = "#7474e4";
+  for (let y = 0; y < size; y += 28) for (let x = 14; x < size; x += 28) { ctx.beginPath(); ctx.arc(x, y, 1.5, 0, 6.28); ctx.fill(); }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 4);
+  return tex;
+})();
+
 function Part({ part, draft, selected, level = 1, interactive, onSelect, children }: PartProps) {
   const [hovered, setHovered] = useState(false);
   const base = PART_MATERIALS[part];
@@ -54,9 +75,11 @@ function Part({ part, draft, selected, level = 1, interactive, onSelect, childre
       color={mat.color}
       roughness={mat.roughness}
       metalness={mat.metalness}
-      envMapIntensity={1.6}
-      clearcoat={isTransparent ? 0 : 0.8}
-      clearcoatRoughness={0.12}
+      normalMap={panelNormalMap}
+      normalScale={new THREE.Vector2(0.35, 0.35)}
+      envMapIntensity={1.8}
+      clearcoat={isTransparent ? 0 : 0.7}
+      clearcoatRoughness={0.1}
       reflectivity={0.9}
       ior={1.5}
       transparent={isTransparent}
