@@ -104,13 +104,20 @@ export const PART_STRANDS: Record<RocketPart, Strand[]> = {
   booster: ["NF", "MD"],
 };
 
-/** Part level from strand mastery: 3+ mastered → Lv3, 1+ → Lv2, else Lv1.
- *  Thresholds are low so a child sees upgrades after their first couple of missions. */
+/** Part level from total correct answers in the part's strands.
+ *  1+ correct → Lv2, 4+ correct → Lv3. Upgrades as soon as a child
+ *  answers their first question correctly. */
 export function partLevel(part: RocketPart, mastery: Map<string, CriterionMastery>): 1 | 2 | 3 {
-  const counts = strandMasteryCounts(mastery);
-  const total = PART_STRANDS[part].reduce((s, strand) => s + counts[strand], 0);
-  if (total >= 3) return 3;
-  if (total >= 1) return 2;
+  let totalCorrect = 0;
+  for (const strand of PART_STRANDS[part]) {
+    for (const [code, m] of mastery) {
+      // Check the criterion belongs to this strand
+      const c = CRITERIA.find((cr) => cr.code === code && cr.strand === strand);
+      if (c && m.correct > 0) totalCorrect += m.correct;
+    }
+  }
+  if (totalCorrect >= 4) return 3;
+  if (totalCorrect >= 1) return 2;
   return 1;
 }
 
