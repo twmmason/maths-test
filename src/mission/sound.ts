@@ -66,8 +66,12 @@ export const sfx = {
   countdown: (n?: number) => {
     beep(880, 0.15, "square", 0.08);
     if (n !== undefined) {
+      // interrupt: each digit hard-cuts the previous one so the voice always
+      // matches the number on screen (no queueing/backlog drift).
       void import("../ai/voice").then(({ speak }) =>
-        speak(n === 0 ? "Liftoff! We have liftoff!" : n === 1 ? "One" : n === 2 ? "Two" : n === 3 ? "Three" : String(n), "flightDirector"),
+        speak(n === 0 ? "Liftoff! We have liftoff!" : n === 1 ? "One" : n === 2 ? "Two" : n === 3 ? "Three" : String(n), "flightDirector", {
+          interrupt: true,
+        }),
       );
     }
   },

@@ -142,15 +142,43 @@ export function unlockVoice() {
   unlocked = true;
 }
 
+/** In-memory clip cache — Dexie lookups are async and add tens of ms of
+ *  jitter, which is exactly what a countdown can't afford. */
+const memCache = new Map<string, Blob>();
+/** The one "exclusive channel" audio element (countdown etc.). */
+let exclusiveAudio: HTMLAudioElement | null = null;
+
+function stopExclusive() {
+  if (exclusiveAudio) {
+    exclusiveAudio.pause();
+    exclusiveAudio = null;
+  }
+  if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+}
+
 /**
  * Speak a line in a character voice. Cache-first; synthesises + caches on a
  * miss; falls back to speechSynthesis (then silence/captions) on failure.
  */
-export async function speak(text: string, role: VoiceRole = "flightDirector"): Promise<void> {
+export async function speak(
+  text: string,
+  role: VoiceRole = "flightDirector",
+  opts?: { interrupt?: boolean },
+): Promise<void> {
+  // interrupt: hard-cut whatever is still talking (countdown numbers must
+  // land on the digit shown on screen, never queue up behind each other).
+  if (opts?.interrupt) stopExclusive();
   try {
     const key = clipKey(text, VOICE_FOR_ROLE[role].voiceName);
-    const clip = await vdb.clips.get(key);
-    if (!clip) {
+    let blob = memCache.get(key);
+    if (!blob) {
+      const clip = await vdb.clips.get(key);
+      if (clip) {
+        blob = clip.mp3;
+        memCache.set(key, blob);
+      }
+    }
+    if (!blob) {
       // Latency rule: NEVER wait seconds for the TTS API mid-launch. Speak
       // instantly with the browser voice and cache the Gemini clip in the
       // background so the next playback is the good one.
@@ -160,10 +188,11 @@ export async function speak(text: string, role: VoiceRole = "flightDirector"): P
       });
       return;
     }
-    if (clip) {
-      const url = URL.createObjectURL(clip.mp3);
+    {
+      const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.volume = 0.9;
+      if (opts?.interrupt) exclusiveAudio = audio;
       audio.onended = () => URL.revokeObjectURL(url);
       await audio.play().catch(() => {
         URL.revokeObjectURL(url);
@@ -193,17 +222,24 @@ const PREWARM_LINES: Array<[string, VoiceRole]> = [
 const MAX_PARALLEL_TTS_REQUESTS = 5;
 
 export async function prewarmVoices(): Promise<void> {
-  if (!GEMINI_KEY) return;
   const misses: Array<[string, VoiceRole, string]> = [];
   for (const [text, role] of PREWARM_LINES) {
     const key = clipKey(text, VOICE_FOR_ROLE[role].voiceName);
-    if (!(await vdb.clips.get(key))) misses.push([text, role, key]);
+    const cached = await vdb.clips.get(key);
+    // Pull existing clips into the in-memory cache so countdown playback is
+    // instant (no async DB hop between the digit appearing and the voice).
+    if (cached) memCache.set(key, cached.mp3);
+    else misses.push([text, role, key]);
   }
+  if (!GEMINI_KEY) return;
   for (let i = 0; i < misses.length; i += MAX_PARALLEL_TTS_REQUESTS) {
     await Promise.all(
       misses.slice(i, i + MAX_PARALLEL_TTS_REQUESTS).map(async ([text, role, key]) => {
         const wav = await synthesise(text, role);
-        if (wav) await vdb.clips.put({ key, mp3: wav, createdAt: Date.now() });
+        if (wav) {
+          memCache.set(key, wav);
+          await vdb.clips.put({ key, mp3: wav, createdAt: Date.now() });
+        }
       }),
     );
   }

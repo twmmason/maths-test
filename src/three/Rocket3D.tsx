@@ -214,25 +214,49 @@ export default function Rocket3D({
         </Part>
       )}
 
-      {/* ELECTRONICS BAY — breadboard panel on the hull */}
+      {/* ELECTRONICS BAY — conformal avionics ring that hugs the hull, with a
+          recessed access panel, status LEDs on the curve and a blade antenna
+          (a flat breadboard stuck to a round hull looked wrong) */}
       {isInstalled("electronics") && (
         <Part {...partProps("electronics")}>
           {(m) => (
-            <group position={[0, layout.hullBottom + design.hullHeight * 0.62, r * 1.02]}>
+            <group position={[0, layout.hullBottom + design.hullHeight * 0.62, 0]}>
+              {/* avionics band wrapping the hull */}
               <mesh castShadow>
-                <boxGeometry args={[0.9, 0.7, 0.12]} />
+                <cylinderGeometry args={[r * 1.035, r * 1.035, 0.55, 28]} />
                 {m}
               </mesh>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <mesh key={i} position={[-0.3 + (i % 3) * 0.3, i < 3 ? 0.16 : -0.16, 0.08]}>
-                  <sphereGeometry args={[0.045, 8, 8]} />
-                  <meshStandardMaterial
-                    color={design.powerBalanced ? "#34d399" : "#fbbf24"}
-                    emissive={design.powerBalanced ? "#34d399" : "#fbbf24"}
-                    emissiveIntensity={0.9}
-                  />
+              {/* ring frames top + bottom */}
+              {[0.3, -0.3].map((y) => (
+                <mesh key={y} position={[0, y, 0]}>
+                  <torusGeometry args={[r * 1.04, 0.028, 8, 28]} />
+                  <meshStandardMaterial color="#334155" metalness={0.8} roughness={0.35} />
                 </mesh>
               ))}
+              {/* recessed dark access panel (curved segment, faces the camera side) */}
+              <mesh rotation={[0, Math.PI / 2 - 0.55, 0]}>
+                <cylinderGeometry args={[r * 1.05, r * 1.05, 0.4, 10, 1, true, 0, 1.1]} />
+                <meshStandardMaterial color="#0f172a" metalness={0.6} roughness={0.4} />
+              </mesh>
+              {/* status LEDs following the hull curve */}
+              {Array.from({ length: 6 }).map((_, i) => {
+                const a = 0.28 + (i % 3) * 0.27;
+                return (
+                  <mesh key={i} position={[Math.sin(a) * r * 1.06, i < 3 ? 0.1 : -0.1, Math.cos(a) * r * 1.06]}>
+                    <sphereGeometry args={[0.04, 8, 8]} />
+                    <meshStandardMaterial
+                      color={design.powerBalanced ? "#34d399" : "#fbbf24"}
+                      emissive={design.powerBalanced ? "#34d399" : "#fbbf24"}
+                      emissiveIntensity={0.9}
+                    />
+                  </mesh>
+                );
+              })}
+              {/* blade antenna */}
+              <mesh position={[0, 0.42, r * 1.0]} castShadow>
+                <boxGeometry args={[0.035, 0.42, 0.1]} />
+                <meshStandardMaterial color="#94a3b8" metalness={0.7} roughness={0.3} />
+              </mesh>
             </group>
           )}
         </Part>

@@ -10,6 +10,7 @@ import { DESTINATION_BY_ID } from "../../mission/destinations";
 import { simulateFlight } from "../../physics/simulateFlight";
 import { recordMission } from "../../mission/recordMission";
 import { sfx } from "../../mission/sound";
+import { ExplosionFX, shatterObject, type Shard } from "../../three/ExplosionFX";
 import TimeOfDaySlider from "../../components/TimeOfDaySlider";
 import { useEffect as useEffectOnce } from "react";
 import type { FlightResult } from "../../physics/types";
@@ -29,244 +30,6 @@ function warpFor(altKm: number): number {
 }
 
 type Phase = "ready" | "countdown" | "flight" | "done" | "abort";
-
-/** Deterministic 0..1 hash for cosmetic variation (no RNG deciding physics). */
-const h01 = (i: number, salt: number) => {
-  const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
-  return x - Math.floor(x);
-};
-
-/** Hollywood boom: layered turbulent fireball + secondary fuel bursts +
- *  shockwave + 80 spark streaks + 44 recognisable rocket fragments, each
- *  trailing its own flame, + fire column + lingering smoke. All timing is
- *  driven off the deterministic sim clock. */
-function ExplosionFX({ y, drift, startT, clockRef }: { y: number; drift: number; startT: number; clockRef: React.MutableRefObject<{ t: number; altKm: number; y: number }> }) {
-  const core = useRef<THREE.Mesh>(null);
-  const mid = useRef<THREE.Mesh>(null);
-  const outer = useRef<THREE.Mesh>(null);
-  const second = useRef<THREE.Mesh>(null);
-  const third = useRef<THREE.Mesh>(null);
-  const ring = useRef<THREE.Mesh>(null);
-  const column = useRef<THREE.Mesh>(null);
-  const light = useRef<THREE.PointLight>(null);
-  const debris = useRef<THREE.Group>(null);
-  const sparks = useRef<THREE.Group>(null);
-  const smoke = useRef<THREE.Group>(null);
-
-  // Recognisable rocket fragments: hull panels, fin plates, tank ring
-  // segments, the nose cone, engine bells — with per-chunk flame trails.
-  const [chunks] = useState(() =>
-    Array.from({ length: 44 }, (_, i) => {
-      const dir = new THREE.Vector3(
-        Math.sin(i * 2.4) + (h01(i, 1) - 0.5) * 1.2,
-        Math.abs(Math.cos(i * 1.7)) * 1.1 + 0.2,
-        Math.cos(i * 3.1) + (h01(i, 2) - 0.5) * 1.2,
-      ).normalize();
-      return {
-        dir,
-        // trail cone points back along the velocity
-        trailQuat: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().negate()),
-        speed: 5 + h01(i, 3) * 11,
-        spinX: (h01(i, 4) - 0.5) * 14,
-        spinZ: (h01(i, 5) - 0.5) * 14,
-        kind: i % 5, // 0 panel, 1 fin, 2 cone, 3 ring segment, 4 engine bell
-        size: 0.7 + h01(i, 6) * 0.9,
-        burns: h01(i, 7) > 0.25, // most fragments burn
-      };
-    }),
-  );
-  const [streaks] = useState(() =>
-    Array.from({ length: 80 }, (_, i) => {
-      const dir = new THREE.Vector3(
-        Math.sin(i * 0.79) + (h01(i, 8) - 0.5),
-        h01(i, 9) * 1.4 - 0.15,
-        Math.cos(i * 1.13) + (h01(i, 10) - 0.5),
-      ).normalize();
-      return {
-        dir,
-        quat: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir),
-        speed: 14 + h01(i, 11) * 26,
-        len: 0.5 + h01(i, 12) * 1.3,
-        life: 0.45 + h01(i, 13) * 0.55,
-      };
-    }),
-  );
-  const [puffs] = useState(() =>
-    Array.from({ length: 18 }, (_, i) => ({
-      dir: new THREE.Vector3(Math.sin(i * 1.9), 0.35 + h01(i, 14) * 0.8, Math.cos(i * 2.3)).normalize(),
-      speed: 1.5 + h01(i, 15) * 2.6,
-      size: 1.4 + h01(i, 16) * 1.6,
-      delay: h01(i, 17) * 0.5,
-    })),
-  );
-
-  useFrame(() => {
-    const age = Math.max(0, clockRef.current.t - startT);
-    const s = Math.min(1, age / 1.5);
-    // turbulence — the fireball boils rather than inflating smoothly
-    const wob = 1 + Math.sin(age * 31) * 0.07 + Math.sin(age * 57 + 1.3) * 0.05;
-    if (core.current) {
-      core.current.scale.setScalar((0.8 + s * 13) * wob);
-      (core.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - s * 1.1);
-    }
-    if (mid.current) {
-      mid.current.scale.set((0.5 + s * 19) * wob, (0.5 + s * 17) / wob, (0.5 + s * 19) * wob);
-      (mid.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.9 - s * 0.95);
-    }
-    if (outer.current) {
-      outer.current.scale.setScalar((0.4 + s * 28) / wob);
-      (outer.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.5 - s * 0.55);
-    }
-    // Secondary + tertiary bursts — tanks cook off one after another.
-    const s2 = Math.max(0, Math.min(1, (age - 0.3) / 1.1));
-    if (second.current) {
-      second.current.scale.setScalar((0.2 + s2 * 17) * wob);
-      (second.current.material as THREE.MeshBasicMaterial).opacity = s2 > 0 ? Math.max(0, 0.95 - s2 * 1.05) : 0;
-    }
-    const s3 = Math.max(0, Math.min(1, (age - 0.7) / 1.2));
-    if (third.current) {
-      third.current.scale.setScalar((0.2 + s3 * 12) / wob);
-      (third.current.material as THREE.MeshBasicMaterial).opacity = s3 > 0 ? Math.max(0, 0.85 - s3 * 0.95) : 0;
-    }
-    if (ring.current) {
-      ring.current.scale.setScalar(0.5 + s * 38);
-      (ring.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.55 - s * 0.6);
-    }
-    // Rising fire column under the blast.
-    if (column.current) {
-      const cs = Math.min(1, age / 0.9);
-      column.current.scale.set(1 + cs * 2.5, 1 + cs * 6, 1 + cs * 2.5);
-      column.current.position.y = -3 + cs * 3;
-      (column.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.7 - age * 0.45);
-    }
-    if (light.current)
-      light.current.intensity =
-        Math.max(0, 140 * (1 - s)) + (s2 > 0 ? 80 * (1 - s2) : 0) + (s3 > 0 ? 50 * (1 - s3) : 0) + Math.sin(age * 41) * 12 * (1 - s);
-    // Fragments: ballistic arcs, tumbling, each with a shrinking flame trail.
-    if (debris.current) {
-      debris.current.children.forEach((c, i) => {
-        const k = chunks[i];
-        const g = c as THREE.Group;
-        g.position.set(k.dir.x * k.speed * age, k.dir.y * k.speed * age - 4.5 * age * age, k.dir.z * k.speed * age);
-        g.rotation.x += 0.016 * k.spinX;
-        g.rotation.z += 0.016 * k.spinZ;
-        const trail = g.children[1] as THREE.Mesh | undefined;
-        if (trail) {
-          const burn = k.burns ? Math.max(0, 1 - age / 2.6) : 0;
-          trail.scale.set(burn * (0.8 + Math.sin(age * 43 + i) * 0.25), burn * (1.6 + Math.sin(age * 37 + i * 2) * 0.5), burn);
-          (trail.material as THREE.MeshBasicMaterial).opacity = burn * 0.9;
-        }
-      });
-    }
-    // Sparks: fast, short-lived white-hot streaks.
-    if (sparks.current) {
-      sparks.current.children.forEach((c, i) => {
-        const k = streaks[i];
-        const f = Math.max(0, 1 - age / k.life);
-        c.position.set(k.dir.x * k.speed * age, k.dir.y * k.speed * age - 5 * age * age, k.dir.z * k.speed * age);
-        ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = f;
-        c.scale.set(f, 1 + age * 2, f);
-      });
-    }
-    // Smoke: dark billowing puffs that grow and linger ~8 s.
-    if (smoke.current) {
-      smoke.current.children.forEach((c, i) => {
-        const p = puffs[i];
-        const sAge = Math.max(0, age - 0.15 - p.delay);
-        const fade = Math.max(0, 1 - sAge / 8);
-        c.position.set(p.dir.x * p.speed * sAge, p.dir.y * p.speed * sAge + sAge * 1.1, p.dir.z * p.speed * sAge);
-        c.scale.setScalar(p.size * (0.3 + sAge * 1.3));
-        ((c as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity = 0.6 * fade;
-      });
-    }
-  });
-  return (
-    <group position={[drift, y + 3, 0]}>
-      {/* fireball layers */}
-      <mesh ref={core}>
-        <sphereGeometry args={[1, 24, 24]} />
-        <meshBasicMaterial color="#ffffff" transparent opacity={1} depthWrite={false} />
-      </mesh>
-      <mesh ref={mid}>
-        <sphereGeometry args={[1, 24, 24]} />
-        <meshBasicMaterial color="#ffb030" transparent opacity={0.9} depthWrite={false} blending={THREE.AdditiveBlending} />
-      </mesh>
-      <mesh ref={outer}>
-        <sphereGeometry args={[1, 24, 24]} />
-        <meshBasicMaterial color="#ff3d12" transparent opacity={0.5} depthWrite={false} blending={THREE.AdditiveBlending} />
-      </mesh>
-      <mesh ref={second} position={[1.1, -1.6, 0.6]}>
-        <sphereGeometry args={[1, 18, 18]} />
-        <meshBasicMaterial color="#ffd28a" transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} />
-      </mesh>
-      <mesh ref={third} position={[-1.4, 0.8, -0.9]}>
-        <sphereGeometry args={[1, 18, 18]} />
-        <meshBasicMaterial color="#ff8a3d" transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} />
-      </mesh>
-      {/* shockwave */}
-      <mesh ref={ring} rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.9, 1.15, 64]} />
-        <meshBasicMaterial color="#ffe9c4" transparent opacity={0.55} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
-      </mesh>
-      {/* rising fire column */}
-      <mesh ref={column} position={[0, -3, 0]}>
-        <coneGeometry args={[1.4, 4, 16, 1, true]} />
-        <meshBasicMaterial color="#ff7a1e" transparent opacity={0.7} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
-      </mesh>
-      <pointLight ref={light} color="#ffaa55" intensity={140} distance={260} decay={2} />
-      {/* smoke */}
-      <group ref={smoke}>
-        {puffs.map((_, i) => (
-          <mesh key={i}>
-            <sphereGeometry args={[1, 10, 10]} />
-            <meshStandardMaterial color={i % 3 === 0 ? "#17171b" : "#2e2e34"} transparent opacity={0.6} depthWrite={false} />
-          </mesh>
-        ))}
-      </group>
-      {/* sparks */}
-      <group ref={sparks}>
-        {streaks.map((k, i) => (
-          <mesh key={i} quaternion={k.quat}>
-            <boxGeometry args={[0.05, k.len, 0.05]} />
-            <meshBasicMaterial color={i % 4 === 0 ? "#ffffff" : "#ffcf6b"} transparent opacity={1} depthWrite={false} blending={THREE.AdditiveBlending} />
-          </mesh>
-        ))}
-      </group>
-      {/* recognisable fragments, each with its own flame trail */}
-      <group ref={debris}>
-        {chunks.map((k, i) => (
-          <group key={i}>
-            <mesh castShadow>
-              {k.kind === 0 ? (
-                <boxGeometry args={[0.7 * k.size, 0.9 * k.size, 0.07]} />
-              ) : k.kind === 1 ? (
-                <boxGeometry args={[0.06, 1.1 * k.size, 0.7 * k.size]} />
-              ) : k.kind === 2 ? (
-                <coneGeometry args={[0.35 * k.size, 0.9 * k.size, 10]} />
-              ) : k.kind === 3 ? (
-                <torusGeometry args={[0.5 * k.size, 0.09, 8, 14, Math.PI * 0.9]} />
-              ) : (
-                <cylinderGeometry args={[0.18 * k.size, 0.4 * k.size, 0.5 * k.size, 12, 1, true]} />
-              )}
-              <meshStandardMaterial
-                color={k.kind === 1 ? "#e5484d" : k.kind === 4 ? "#3c4048" : "#cfd6e4"}
-                metalness={0.6}
-                roughness={0.4}
-                emissive="#ff5a1e"
-                emissiveIntensity={k.burns ? 1.8 : 0.4}
-                side={THREE.DoubleSide}
-              />
-            </mesh>
-            <mesh quaternion={k.trailQuat} position={[0, 0, 0]}>
-              <coneGeometry args={[0.22 * k.size, 1.8 * k.size, 8, 1, true]} />
-              <meshBasicMaterial color="#ff9a2e" transparent opacity={0.9} depthWrite={false} blending={THREE.AdditiveBlending} />
-            </mesh>
-          </group>
-        ))}
-      </group>
-    </group>
-  );
-}
 
 /** Rocket that follows the simulated trajectory. */
 function FlyingRocket({
@@ -295,17 +58,17 @@ function FlyingRocket({
   const [flame, setFlame] = useState(0);
   const catastrophe = flight.failures.find((e) => e.severity === "catastrophic");
   const [exploded, setExploded] = useState(false);
-  const [boomState, setBoomState] = useState<{ y: number; drift: number } | null>(null);
+  const [boomState, setBoomState] = useState<{ y: number; drift: number; shards: Shard[] } | null>(null);
 
   const orbitProg = useRef(0);
   const orbitStartY = useRef<number | null>(null);
 
   useFrame((state, dt) => {
-    if (!group.current) return;
     // Orbit coast: ease from the ascent's last height up to true altitude
     // (metres) inside the one world scene — sky fades to black, the limb
     // appears, all from the same atmosphere.
     if (orbit) {
+      if (!group.current) return;
       if (orbitStartY.current === null) orbitStartY.current = clockRef.current.y;
       orbitProg.current = Math.min(1, orbitProg.current + dt / 8);
       const p = orbitProg.current;
@@ -328,7 +91,7 @@ function FlyingRocket({
       return;
     }
     if (!playing) {
-      group.current.position.y = 0;
+      if (group.current) group.current.position.y = 0;
       return;
     }
     const warp = warpFor(clockRef.current.altKm);
@@ -346,7 +109,6 @@ function FlyingRocket({
       const frac = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0;
       alt = a.altitude + (b.altitude - a.altitude) * frac;
     }
-    clockRef.current.altKm = alt;
     // Lateral drift (gimbal / CG veer) — same interpolation as altitude.
     let drift = 0;
     if (idx > 0) {
@@ -354,16 +116,29 @@ function FlyingRocket({
       const frac = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0;
       drift = (a.driftX ?? 0) + ((b.driftX ?? 0) - (a.driftX ?? 0)) * frac;
     }
-    const driftScene = drift * 3;
-    // Scene y: log-ish scaling so the rocket visibly climbs then leaves frame
-    // No cap — the camera director tracks the rocket at any height
-    const y = alt * 3 + t * 0.4;
-    clockRef.current.y = y * VEHICLE_SCALE; // world-space (rocket rig is scaled)
+    // TRUE-SCALE mapping: the geo world is in metres and the rocket rig is
+    // scaled by VEHICLE_SCALE, so rig-y = metres / VEHICLE_SCALE. The HUD's
+    // km readout and the rocket's height above the real buildings now agree.
+    const driftScene = (drift * 1000) / VEHICLE_SCALE;
+    const y = (alt * 1000) / VEHICLE_SCALE + t * 0.5;
     // Catastrophic moment: swap the rocket for the explosion + debris.
-    if (catastrophe && t >= catastrophe.t && !exploded) {
-      setExploded(true);
-      setBoomState({ y, drift: driftScene });
+    // NOTE: the sim clock KEEPS running after the boom (the ExplosionFX
+    // animates off clockRef.t) — but altitude/camera targets freeze at the
+    // blast point so the shot holds on the fireball, not empty sky.
+    if (catastrophe && t >= catastrophe.t) {
+      if (!exploded) {
+        // Shatter the ACTUAL rocket meshes before unmounting them — the
+        // debris is the rocket the player built, not generic chunks.
+        const shards = group.current ? shatterObject(group.current) : [];
+        setExploded(true);
+        setBoomState({ y, drift: driftScene, shards });
+        if (flame !== 0) setFlame(0);
+      }
+      return;
     }
+    clockRef.current.altKm = alt;
+    clockRef.current.y = y * VEHICLE_SCALE; // world-space (rocket rig is scaled)
+    if (!group.current) return;
     // Camera shake: strong rumble during burn, fading after cutoff
     const burnPhase = t < flight.burnoutT ? 1 : Math.max(0, 1 - (t - flight.burnoutT) * 0.5);
     const shakeAmt = burnPhase * (t < 3 ? 0.12 : 0.05); // extra violent at ignition
@@ -408,7 +183,13 @@ function FlyingRocket({
         </group>
       )}
       {exploded && boomState && catastrophe && (
-        <ExplosionFX y={boomState.y} drift={boomState.drift} startT={catastrophe.t} clockRef={clockRef} />
+        <ExplosionFX
+          y={boomState.y}
+          drift={boomState.drift}
+          startT={catastrophe.t}
+          clockRef={clockRef}
+          shards={boomState.shards}
+        />
       )}
     </>
   );
@@ -442,8 +223,10 @@ function OrbitRevealCam({
   return null;
 }
 
-export const SHOT_NAMES = ["📺 Pad Cam", "📺 Tower Cam", "📺 Tracking Cam", "📺 Chase Cam", "📺 Orbit Cam", "🎥 Free Cam (drag to look)"] as const;
-export const FREE_CAM = 5;
+// NOTE: module-local (not exported) so Vite Fast Refresh keeps working —
+// mixing component and non-component exports breaks HMR for this file.
+const SHOT_NAMES = ["📺 Pad Cam", "📺 Tower Cam", "📺 Tracking Cam", "📺 Chase Cam", "📺 Orbit Cam", "🎥 Free Cam (drag to look)"] as const;
+const FREE_CAM = 5;
 
 /** Launch director: pick the shot from the rocket's ACTUAL simulated state —
  *  slow ascents naturally hold each shot longer (altitude-driven cuts). */
@@ -574,6 +357,7 @@ export default function LaunchPage() {
   const [userCam, setUserCam] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const clockRef = useRef<{ t: number; altKm: number; y: number; x?: number; z?: number; warp?: number }>({ t: 0, altKm: 0, y: 0 });
+  const [destruct, setDestruct] = useState<{ t: number; altKm: number } | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const savedRef = useRef(false);
 
@@ -582,6 +366,16 @@ export default function LaunchPage() {
   const quality = tasksTotal > 0 ? tasksCorrect / tasksTotal : 1;
   const liveFlight = useMemo(() => {
     const f = simulateFlight(design, quality);
+    // Dev/preview flag: `?fly` forces a clean nominal ascent (regardless of
+    // the current design) so flight-time UI like SELF-DESTRUCT can be tested.
+    if (typeof window !== "undefined" && (window.location.search.includes("fly") || window.location.hash.includes("fly"))) {
+      // Realistic pacing: ~1.3 g off the pad building up — ≈40 m at T+5 s.
+      const samples = Array.from({ length: 81 }, (_, i) => {
+        const t = i * 0.5;
+        return { t, altitude: (t * t * (1 + t / 30)) / 1000, driftX: 0 };
+      }) as unknown as typeof f.samples;
+      return { ...f, samples, burnoutT: 30, apogeeT: 40, maxAltitudeKm: 4, outcome: "nominal" as const, failures: [], events: [], struggledOffPad: false, tumbled: false };
+    }
     // Dev/preview flag: `?boom` forces a mid-air catastrophe so the explosion
     // FX can be checked without mis-building a rocket. Cosmetic only.
     if (typeof window !== "undefined" && (window.location.search.includes("boom") || window.location.hash.includes("boom"))) {
@@ -600,8 +394,46 @@ export default function LaunchPage() {
   const frozenFlightRef = useRef<FlightResult | null>(null);
   if (phase === "ready") frozenFlightRef.current = null;
   else if (!frozenFlightRef.current) frozenFlightRef.current = liveFlight;
-  const flight = frozenFlightRef.current ?? liveFlight;
-  const reached = flight.maxAltitudeKm >= (dest?.requiredAltitudeKm ?? 150);
+  const baseFlight = frozenFlightRef.current ?? liveFlight;
+  // Range Safety: the player can command flight termination mid-ascent.
+  // It injects a deterministic catastrophic event at the commanded instant —
+  // same shatter + fireball pipeline as a genuine failure.
+  const flight = useMemo<FlightResult>(() => {
+    if (!destruct) return baseFlight;
+    const ev = {
+      t: destruct.t,
+      label: "RANGE SAFETY — FLIGHT TERMINATION SYSTEM FIRED (your command, Commander)",
+      severity: "catastrophic" as const,
+    };
+    return {
+      ...baseFlight,
+      outcome: "lostVehicle" as const,
+      maxAltitudeKm: Math.min(baseFlight.maxAltitudeKm, Math.max(0, Math.round(destruct.altKm))),
+      failures: [...baseFlight.failures, ev],
+      events: [...baseFlight.events, ev],
+    };
+  }, [baseFlight, destruct]);
+  // Effects capture `flight` at phase-change time; the ref always carries the
+  // latest (e.g. after a commanded destruct) for save/report.
+  const flightRef = useRef(flight);
+  flightRef.current = flight;
+  const reached = flight.maxAltitudeKm >= (dest?.requiredAltitudeKm ?? 150) && flight.outcome !== "lostVehicle";
+  // Earliest scheduled catastrophe (Infinity if the flight is clean). The
+  // FTS button stays available right up until that moment.
+  const boomT = flight.failures.reduce((m, f) => (f.severity === "catastrophic" ? Math.min(m, f.t) : m), Infinity);
+
+  const selfDestruct = () => {
+    if (destruct || clockRef.current.t >= boomT) return;
+    const t = clockRef.current.t + 0.05;
+    setDestruct({ t, altKm: clockRef.current.altKm });
+    firedEvents.current.add(t);
+    setCaption("RANGE SAFETY — FLIGHT TERMINATION SYSTEM FIRED (your command, Commander)");
+    sfx.explosion();
+    sfx.rso("Flight termination commanded. The range is clear, the crew capsule is safely away — that button is very satisfying, Commander.");
+    setFlash(true);
+    setTimeout(() => setFlash(false), 350);
+    setTimeout(() => setCaption(null), 5000);
+  };
 
   // Countdown
   useEffect(() => {
@@ -661,19 +493,23 @@ export default function LaunchPage() {
     const finishFlight = async () => {
       if (!savedRef.current) {
         savedRef.current = true;
+        // Read through the ref: a commanded self-destruct rewrites the flight
+        // AFTER this effect's closure was captured.
+        const f = flightRef.current;
+        const r = f.maxAltitudeKm >= (dest?.requiredAltitudeKm ?? 150) && f.outcome !== "lostVehicle";
         const screenshot = canvasRef.current?.toDataURL("image/png");
-        setLastFlight({ ...flight, screenshot });
+        setLastFlight({ ...f, screenshot });
         const { missionId, newPatches } = await recordMission(
           {
             destinationId,
             launchSiteId: site.id,
             tasksCorrect,
             tasksTotal,
-            maxAltitudeKm: flight.maxAltitudeKm,
-            reachedDestination: reached,
+            maxAltitudeKm: f.maxAltitudeKm,
+            reachedDestination: r,
             screenshot,
             photos: [],
-            outcome: flight.outcome,
+            outcome: f.outcome,
           },
           tasksTotal > 0 && tasksCorrect === tasksTotal,
         );
@@ -798,6 +634,16 @@ export default function LaunchPage() {
         </button>
         <button className="btn-ghost !px-3 !py-1 text-xs" onClick={() => navigate("/vab")}>← VAB</button>
       </div>
+
+      {phase === "flight" && !destruct && tPlus < boomT - 0.05 && (
+        <button
+          className="absolute bottom-6 right-4 z-10 rounded-xl px-4 py-3 font-black text-sm bg-red-700/80 hover:bg-red-600 border-2 border-red-300 text-red-100 shadow-glow animate-pulse"
+          onClick={selfDestruct}
+          title="Range Safety flight termination — ends the flight in a fireball. The crew capsule always escapes."
+        >
+          💥 SELF-DESTRUCT
+        </button>
+      )}
 
       {phase === "flight" && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 hud-panel px-6 py-2 z-10 text-center">
