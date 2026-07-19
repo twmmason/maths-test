@@ -1,4 +1,4 @@
-# Rocket Lab — KS3 "Astronaut Academy" Expansion (build prompt)
+ # Rocket Lab — KS3 "Astronaut Academy" Expansion (build prompt)
 
 > **Give this entire document to the AI coding agent.** It extends the existing,
 > working Rocket Lab app (see `PROMPT.md` and `PROGRESS.md`) with the FULL
