@@ -1017,6 +1017,53 @@ Write **Vitest unit tests as you go** for the pure logic (no 3D):
   every AI feature degrades cleanly to its static fallback when `getClient()`
   returns `null`
 
+### Progress tracking & definition of done (MANDATORY process)
+
+Development is only "done" when it is **provably** done. Follow this process
+from the first commit:
+
+**1. `PROGRESS.md` — the living status board.** Create it in Phase 1 at the
+repo root, mirroring every checkbox in Phases 1–7 below. Tick items as they
+are completed (with a one-line note of evidence), and when a phase's "Done
+when" criteria pass, record a dated sign-off, e.g.:
+
+```markdown
+## Phase 3: Draft → Certified Workflow   Status: ✅ COMPLETE (2026-07-21)
+- [x] Task templates for NOSE CONE — 8 templates, 24 tests passing
+- [x] ProtractorWidget in 3D scene
+Done-when verified: nose cone certified end-to-end in the browser,
+attempt row visible in Dexie. `pnpm verify` green (58 tests).
+```
+
+Rules: never tick an item that hasn't been verified working in the browser or
+by a test; never start phase N+1 while phase N has unticked items or a
+failing "Done when" — unless the item is logged under a "Deferred" heading in
+PROGRESS.md with a reason and a phase where it will be picked up.
+
+**2. `pnpm verify` — the single green/red command.** Add to package.json:
+`"verify": "tsc -b && vitest run && tsx scripts/coverage-check.ts"`.
+`scripts/coverage-check.ts` loads every template and **exits non-zero**,
+listing: any of the 81 criteria with no working template, any template whose
+briefing contains an operation symbol (§10 rule 4), and any part category
+with no certification tasks. Run `pnpm verify` before every phase sign-off
+and before every commit.
+
+**3. `/dev/status` — in-app status page (dev-only route).** Renders live:
+the 81-criteria coverage map (strand × year grid, green/red), template counts
+per part, DB seed status, Gemini key status (active / fallback mode), and the
+current phase read from PROGRESS.md. This formalises Phase 4's "dev-only
+coverage check" — build the skeleton in Phase 1 so gaps stay visible at a
+glance for the whole build.
+
+**4. Git discipline.** Commit at least once per completed checklist item with
+a `phaseN:` prefix (e.g. `phase3: protractor widget + certification flow`) so
+progress is auditable from `git log` alone.
+
+**5. Final acceptance.** The project is complete ONLY when: `pnpm verify` is
+green, `/dev/status` shows 81/81 criteria covered, and every §15 success
+criterion has been walked through in a real browser session and signed off
+(numbered + dated) at the bottom of PROGRESS.md.
+
 ### Phase 1: Foundation
 - [ ] Vite + React 18 + TS + Tailwind project setup
 - [ ] Dexie DB with schema
@@ -1026,6 +1073,8 @@ Write **Vitest unit tests as you go** for the pure logic (no 3D):
 - [ ] Gemini client wrapper (`src/ai/gemini.ts`) reading `VITE_GEMINI_API_KEY`
       + `VITE_GEMINI_API_KEY_POOL` from the existing `.env.local` (key rotation
       on 429), running in fallback mode when no key is set
+- [ ] `PROGRESS.md` status board + `pnpm verify` script + `/dev/status`
+      skeleton (see "Progress tracking & definition of done" above)
 
 **Done when**: `./run.sh` starts cleanly, all 4 pages render with the space
 theme, criteria are queryable from the DB, and a profile row is seeded.
@@ -1069,9 +1118,10 @@ other parts copy.
 - [ ] Booster certification tasks (reuse engine NF+MD templates with booster context)
 - [ ] Pre-flight checklist (NF rapid-fire) + ChecklistWidget + uncertified-part warnings
 
-**Done when**: every criterion in §6 has at least one working template
-(add a dev-only coverage check that lists unmapped criteria), and every part
-category in the catalogue can be attached and certified through tasks.
+**Done when**: every criterion in §6 has at least one working template — the
+`pnpm verify` coverage check passes and `/dev/status` shows 81/81 green — and
+every part category in the catalogue can be attached and certified through
+tasks.
 
 ### Phase 5: Mission Flow
 - [ ] Launch site picker (SitePicker + launchSites.ts, §5b), persisted to profile
@@ -1425,3 +1475,8 @@ When complete, a 10-year-old should be able to:
 And at no point should he think "I'm doing maths homework." He should think
 "I'm building a rocket, and I need to figure out the right angle/measurement/
 ratio to make it work."
+
+**Declaring completion**: follow the §9 "Progress tracking & definition of
+done" process — completion is only declared when `pnpm verify` is green,
+`/dev/status` shows 81/81 criteria covered, and each numbered criterion above
+has a dated browser-walkthrough sign-off in `PROGRESS.md`.
