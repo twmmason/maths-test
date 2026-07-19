@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useImperativeHandle, forwardRef } from "react";
 import { generateMissionPhoto, RENDER_STYLES, type RenderStyle } from "../ai/missionPhoto";
 import { hasKey } from "../ai/gemini";
 
@@ -13,12 +13,22 @@ interface Props {
   onModeChange?: (mode: "cad" | "fast" | "quality") => void;
 }
 
+export interface ViewSwitcherHandle {
+  recapture: () => void;
+}
+
 /** Mission Camera pill: Workshop (live 3D) / Photo (fast repaint) / Poster (quality repaint). */
-export default function ViewSwitcher({ getCanvas, siteName, onPhoto, onModeChange }: Props) {
+const ViewSwitcher = forwardRef<ViewSwitcherHandle, Props>(function ViewSwitcher({ getCanvas, siteName, onPhoto, onModeChange }, ref) {
   const [mode, setMode] = useState<Mode>("cad");
   const [style, setStyle] = useState<RenderStyle>("photorealistic");
   const [overlay, setOverlay] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useImperativeHandle(ref, () => ({
+    recapture: () => {
+      if (mode !== "cad") void capture(mode as Exclude<Mode, "cad">);
+    },
+  }));
 
   const capture = async (m: Exclude<Mode, "cad">) => {
     const canvas = getCanvas();
@@ -78,4 +88,6 @@ export default function ViewSwitcher({ getCanvas, siteName, onPhoto, onModeChang
 
     </>
   );
-}
+});
+
+export default ViewSwitcher;

@@ -46,7 +46,7 @@ export async function generateMissionPhoto(
   };
 
   try {
-    return await withTimeout(call(), quality === "fast" ? 25000 : 60000);
+    return await withTimeout(call(), quality === "fast" ? 12000 : 35000);
   } catch (err) {
     if (isRateLimit(err)) {
       rotateKey();

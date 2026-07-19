@@ -7,7 +7,7 @@ import { DESTINATIONS } from "../../mission/destinations";
 import { SITE_BY_ID } from "../../mission/launchSites";
 import { PATCH_BY_ID } from "../../mission/patches";
 import SitePicker from "./SitePicker";
-import ViewSwitcher from "../../components/ViewSwitcher";
+import ViewSwitcher, { type ViewSwitcherHandle } from "../../components/ViewSwitcher";
 
 export default function HangarPage() {
   const navigate = useNavigate();
@@ -22,6 +22,8 @@ export default function HangarPage() {
   const [photoMode, setPhotoMode] = useState(false);
   const [photoOverlay, setPhotoOverlay] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const lastPhotoMode = useRef<"fast" | "quality" | null>(null);
+  const viewSwitcherRef = useRef<{ recapture: () => void } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // First visit: pick the launch site.
@@ -124,20 +126,44 @@ export default function HangarPage() {
         </div>
       )}
       {photoOverlay && photoMode && !photoBusy && (
-        <div className="absolute inset-0 z-20 pointer-events-none">
-          <img src={photoOverlay} alt="Mission photo" className="w-full h-full object-cover" />
+        <div
+          className="absolute inset-0 z-20"
+          onPointerDown={() => {
+            // Dismiss the photo so the live 3D is visible while dragging
+            setPhotoOverlay(null);
+          }}
+          onPointerUp={() => {
+            // After the drag, re-render the photo from the new angle
+            if (lastPhotoMode.current) {
+              setPhotoBusy(true);
+              const canvas = canvasRef.current;
+              if (!canvas) { setPhotoBusy(false); return; }
+              // Brief delay so the canvas renders the new angle before capture
+              setTimeout(() => {
+                viewSwitcherRef.current?.recapture();
+              }, 200);
+            }
+          }}
+        >
+          <img src={photoOverlay} alt="Mission photo" className="w-full h-full object-cover pointer-events-none" />
         </div>
       )}
 
       {/* Mission camera pill */}
       <div className="absolute bottom-4 right-4 z-30">
         <ViewSwitcher
+          ref={viewSwitcherRef}
           getCanvas={() => canvasRef.current}
           siteName={site.name}
           onModeChange={(m) => {
             setPhotoMode(m !== "cad");
-            if (m === "cad") setPhotoOverlay(null);
-            else setPhotoBusy(true);
+            if (m === "cad") {
+              setPhotoOverlay(null);
+              lastPhotoMode.current = null;
+            } else {
+              setPhotoBusy(true);
+              lastPhotoMode.current = m as "fast" | "quality";
+            }
           }}
           onPhoto={(url) => {
             setPhotoOverlay(url);
