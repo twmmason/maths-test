@@ -10,6 +10,27 @@ export const RENDER_STYLES: { id: RenderStyle; label: string }[] = [
   { id: "toy-model", label: "🧸 Toy model" },
 ];
 
+/** Resize a dataURL image to fit within maxDim (preserving aspect ratio).
+ *  Returns a smaller PNG dataURL — much faster Gemini round-trip. */
+async function resizeDataUrl(dataUrl: string, maxDim: number): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => resolve(dataUrl); // fallback: send original
+    img.src = dataUrl;
+  });
+}
+
 /**
  * Repaint a canvas screenshot with a Gemini image model (Mission Camera).
  * Returns a dataURL, or null on any failure (caller falls back to the plain screenshot).
@@ -23,7 +44,9 @@ export async function generateMissionPhoto(
   const client = getClient();
   if (!client) return null;
   const model = quality === "fast" ? IMAGE_MODEL_FAST : IMAGE_MODEL_QUALITY;
-  const base64 = screenshotDataUrl.split(",")[1];
+  // Resize the screenshot to max 768px before sending — dramatically faster API response
+  const resized = await resizeDataUrl(screenshotDataUrl, 768);
+  const base64 = resized.split(",")[1];
   if (!base64) return null;
 
   const prompt = `Repaint this 3D render of a child's rocket on the launch pad at ${siteName} as a ${style.replace("-", " ")} photograph. Keep the rocket's shape, parts and colours exactly as shown.`;

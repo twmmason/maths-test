@@ -129,20 +129,17 @@ export default function HangarPage() {
         <div
           className="absolute inset-0 z-20"
           onPointerDown={() => {
-            // Dismiss the photo so the live 3D is visible while dragging
+            // Dismiss the photo so the live 3D is visible while dragging.
+            // A window-level pointerup listener triggers re-capture from the new angle.
             setPhotoOverlay(null);
-          }}
-          onPointerUp={() => {
-            // After the drag, re-render the photo from the new angle
-            if (lastPhotoMode.current) {
-              setPhotoBusy(true);
-              const canvas = canvasRef.current;
-              if (!canvas) { setPhotoBusy(false); return; }
-              // Brief delay so the canvas renders the new angle before capture
-              setTimeout(() => {
-                viewSwitcherRef.current?.recapture();
-              }, 200);
-            }
+            const onUp = () => {
+              window.removeEventListener("pointerup", onUp);
+              if (lastPhotoMode.current) {
+                setPhotoBusy(true);
+                setTimeout(() => viewSwitcherRef.current?.recapture(), 300);
+              }
+            };
+            window.addEventListener("pointerup", onUp, { once: true });
           }}
         >
           <img src={photoOverlay} alt="Mission photo" className="w-full h-full object-cover pointer-events-none" />
