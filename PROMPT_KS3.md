@@ -254,6 +254,32 @@ The Phase 7 deferral in `PROGRESS.md` is now cancelled — implement it properly
   destinations, with destination-appropriate imagery prompts (Jupiter's
   moons, Saturn's rings…).
 
+### 6c. Render modes must work properly (Gaudi's ViewSwitcher, for real)
+Audit and fix the Mission Camera so it genuinely matches Gaudi's behaviour —
+verify each mode end-to-end in the browser with the real keys:
+- **🛠 Workshop (`cad`)** — the live interactive R3F viewport (default; the
+  game is always played here).
+- **📸 Photo (`fast`)** — capture the canvas as PNG (same-frame capture /
+  `preserveDrawingBuffer`) and have **`gemini-2.5-flash-image`** (a.k.a. Nano
+  Banana) repaint it photorealistically in seconds.
+- **🎞 Poster (`quality`)** — capture → **`gemini-3-pro-image-preview`**
+  (Nano Banana Pro) for the high-quality mission poster.
+- Prompt template must keep the rocket faithful: "Repaint this 3D render of a
+  child's rocket on the launch pad at {site name} as a {style} photograph.
+  Keep the rocket's shape, parts and colours exactly as shown." Include the
+  destination/site flavour for Academy missions.
+- **Style presets row** appears when a photo mode is active: `photorealistic`,
+  `night-launch`, `watercolor`, `concept-art`, `toy-model`.
+- **Overlay behaviour exactly like Gaudi**: the generated image sits as a
+  pointer-transparent `<img>` over the canvas; switching back to Workshop or
+  moving the camera dismisses it; a "developing photo… 📷" shimmer shows
+  while generating.
+- Every generated Photo/Poster saves to the mission record's `photos` for the
+  Flight Log scrapbook. Rotate keys on 429 like all other Gemini calls.
+- If the image model returns nothing/invalid, save the plain screenshot —
+  but treat that as an error path and surface a gentle "camera glitch" toast,
+  not a silent downgrade.
+
 ### What must NOT change
 - All 81 KS2 criteria, templates and tests keep passing untouched.
 - Multi-profile system (each commander keeps an independent KS2+KS3 record).
@@ -281,6 +307,7 @@ The Phase 7 deferral in `PROGRESS.md` is now cancelled — implement it properly
    the Academy, certifying one part per new domain (Number, Algebra, Ratio,
    Geometry, Probability, Statistics) through the new widgets, flying an
    Academy destination whose report references the KS3 maths used, **real 3D
-   Tiles terrain + takram sky visible at the chosen launch site**, and a
-   live Gemini hint/debrief/telemetry-insight observed working with the real
-   keys.
+   Tiles terrain + takram sky visible at the chosen launch site**, a live
+   Gemini hint/debrief/telemetry-insight observed working with the real keys,
+   and **both Photo and Poster render modes producing real Nano Banana
+   repaints** that land in the Flight Log scrapbook.
