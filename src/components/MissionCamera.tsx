@@ -15,12 +15,15 @@ export default function MissionCamera({
   getCanvas,
   siteName,
   siteTerrain,
+  sceneContext,
   onPhotoModeChange,
   pillClassName = "absolute bottom-4 right-4 z-30",
 }: {
   getCanvas: () => HTMLCanvasElement | null;
   siteName: string;
   siteTerrain?: string;
+  /** Scene context hint for the AI photo prompt ("pad" | "in-flight" | "orbit"). */
+  sceneContext?: "pad" | "in-flight" | "orbit";
   onPhotoModeChange?: (active: boolean) => void;
   pillClassName?: string;
 }) {
@@ -90,6 +93,7 @@ export default function MissionCamera({
           getCanvas={getCanvas}
           siteName={siteName}
           siteTerrain={siteTerrain}
+          sceneContext={sceneContext}
           onModeChange={(m) => {
             const active = m !== "cad";
             setPhotoMode(active);

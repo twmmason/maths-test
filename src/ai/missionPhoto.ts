@@ -41,6 +41,9 @@ export async function generateMissionPhoto(
   style: RenderStyle,
   siteName: string,
   terrain?: string,
+  /** Hint about the scene context (e.g. "in-flight", "orbit"). When omitted
+   *  the prompt defaults to a ground-level pad shot. */
+  sceneContext?: "pad" | "in-flight" | "orbit",
 ): Promise<string | null> {
   const client = getClient();
   if (!client) return null;
@@ -50,18 +53,26 @@ export async function generateMissionPhoto(
   const base64 = resized.split(",")[1];
   if (!base64) return null;
 
+  const ctx = sceneContext ?? "pad";
   const terrainHint: Record<string, string> = {
     coastal: "on a concrete pad near the ocean coast, with sea and shoreline visible in the background",
     steppe: "on a vast flat steppe plain, brown grasslands stretching to the horizon",
     jungle: "surrounded by dense tropical jungle, lush green canopy in the background",
     island: "on a small coastal island, green cliffs and sea visible around the pad",
   };
-  const bgHint = terrainHint[terrain ?? "coastal"] ?? "on a launch pad";
+  const bgHint =
+    ctx === "orbit"
+      ? "coasting in orbit high above the Earth, with the curved horizon and black space visible"
+      : ctx === "in-flight"
+        ? `climbing through the sky above ${siteName}, with engine exhaust trailing below it and the ground far beneath`
+        : terrainHint[terrain ?? "coastal"] ?? "on a launch pad";
   const prompt = [
-    `Repaint this 3D render as a ${style.replace("-", " ")} photograph of a child's rocket ${bgHint} at ${siteName}.`,
+    `Repaint this 3D render as a ${style.replace("-", " ")} photograph of a child's rocket ${bgHint}.`,
     "CRITICAL: Keep the rocket's exact shape, proportions, parts and colours — only repaint the rendering style.",
-    "CRITICAL: Keep the background terrain, sky and surroundings exactly as shown in the original image — do NOT change the location, landscape or horizon.",
-    "The rocket should look like a real physical object sitting in the real location shown.",
+    "CRITICAL: Keep the background, sky and surroundings exactly as shown in the original screenshot — do NOT add a launch pad or ground unless they are already visible.",
+    ctx !== "pad"
+      ? "The rocket is IN FLIGHT — do NOT place it on a pad or podium."
+      : "The rocket should look like a real physical object sitting in the real location shown.",
   ].join(" ");
 
   const call = async () => {

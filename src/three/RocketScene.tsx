@@ -252,7 +252,7 @@ export default function RocketScene({
         <OrbitControls
           ref={controlsRef}
           enablePan
-          maxPolarAngle={Math.PI / 2 - 0.04}
+          maxPolarAngle={Math.PI - 0.04}
           minDistance={2 * VEHICLE_SCALE}
           maxDistance={1_000_000}
           autoRotate={autoRotate && !reducedMotion}

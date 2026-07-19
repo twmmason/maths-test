@@ -179,7 +179,11 @@ export function simulateFlight(design: RocketDesign, engineeringQuality = 1): Fl
     // Throttle-up ramp: real rockets leave the pad at ~1.3 g net and only
     // build towards ~4 g as the tanks empty — so T+5 s sits around 60–100 m,
     // not half a kilometre. The cap still relaxes above the atmosphere.
-    const thrustAccelCap = Math.min(40, G * (1.35 + 0.09 * t)) * (1 + Math.pow(alt / 40000, 2));
+    // Throttle-up ramp: realistic ~1.3 g leaving the pad, building to ~4 g
+    // through the atmosphere. Above 80 km the atmosphere is gone and
+    // engines can push harder — the quadratic relaxation opens up
+    // deep-space injection burns for the endgame KS3 destinations.
+    const thrustAccelCap = Math.min(40, G * (1.35 + 0.09 * t)) * (1 + Math.pow(alt / 30000, 2.5));
     const thrustAccel = Math.min(thrustN / Math.max(mass, 1), thrustAccelCap);
     const accel = thrustAccel - G * Math.max(0, 1 - alt / 400000) - dragN / Math.max(mass, 1);
     vel += accel * dt;

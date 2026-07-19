@@ -621,6 +621,7 @@ export default function LaunchPage() {
         getCanvas={() => canvasRef.current}
         siteName={site.name}
         siteTerrain={site.terrain}
+        sceneContext={orbitView ? "orbit" : phase === "flight" || phase === "done" ? "in-flight" : "pad"}
         pillClassName="absolute bottom-20 right-4 z-30"
         onPhotoModeChange={(active) => {
           setPhotoPaused(active);
@@ -765,7 +766,9 @@ export default function LaunchPage() {
           rocket into space (earned by actually reaching orbital altitude) */}
       {orbitView && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 hud-panel px-4 py-1.5 text-xs text-cyan-200">
-          🌍 Orbit achieved — same sky, just 400 km higher, Commander
+          {dest?.journey
+            ? `🚀 ${dest.journey.burnName} complete — now cruising ${dest.journey.distance} to ${dest.name}, Commander`
+            : "🌍 Orbit achieved — same sky, just 400 km higher, Commander"}
         </div>
       )}
 
@@ -783,7 +786,9 @@ export default function LaunchPage() {
               {flight.outcome === "lostVehicle"
                 ? "Well… that was spectacular, Commander!"
                 : reached
-                  ? `${dest?.name} reached, Commander!`
+                  ? dest?.journey
+                    ? `On course for ${dest.name}, Commander!`
+                    : `${dest?.name} reached, Commander!`
                   : "A mighty climb, Commander!"}
             </h2>
             {flight.outcome === "lostVehicle" && (
@@ -792,8 +797,12 @@ export default function LaunchPage() {
             <p className="text-sm text-slate-300">
               Peak altitude <span className="text-cyan-300 font-bold">{flight.maxAltitudeKm.toLocaleString("en-GB")} km</span>
               {reached
-                ? " — destination confirmed. Beautiful engineering."
-                : ` — ${dest?.name} needs ${dest?.requiredAltitudeKm.toLocaleString("en-GB")} km. The report shows exactly what to tune next time.`}
+                ? dest?.journey
+                  ? ` — ${dest.journey.burnName} confirmed. The launch was the hard part; the ship now cruises ${dest.journey.distance} over ${dest.journey.cruise} to reach ${dest.name}.`
+                  : " — destination confirmed. Beautiful engineering."
+                : dest?.journey
+                  ? ` — the ${dest.journey.burnName} needs ${dest.requiredAltitudeKm.toLocaleString("en-GB")} km. ${dest.name} is ${dest.journey.distance} away — you have to escape Earth first. The report shows what to tune.`
+                  : ` — ${dest?.name} needs ${dest?.requiredAltitudeKm.toLocaleString("en-GB")} km. The report shows exactly what to tune next time.`}
             </p>
             {flight.struggledOffPad && <p className="text-xs text-amber-300">The rocket strained off the pad — TWR was low.</p>}
             {flight.tumbled && flight.failures.length === 0 && <p className="text-xs text-amber-300">It tumbled in the wind — more fin stability would help.</p>}

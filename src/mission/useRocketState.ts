@@ -111,15 +111,23 @@ export const useRocketState = create<RocketState>((set, get) => ({
     const attempts = await attemptsFor(profile.id);
     const saved = await db.savedMissions.get(profile.id);
     const design = upgradeDesign(saved?.design ?? profile.rocketDesign ?? emptyDesign());
+    // recordMission deletes the saved mission once a flight completes; a
+    // refresh must NOT reset the chosen destination to the default — fall
+    // back to the in-memory selection, then the last persisted choice.
+    const destinationId =
+      saved?.destinationId ??
+      (get().ready ? get().destinationId : null) ??
+      localStorage.getItem("rocketlab-destination") ??
+      "lowOrbit";
     const partPlans: Partial<Record<RocketPart, PartPlan>> = {};
     for (const part of Object.keys(design.installedParts) as RocketPart[]) {
-      partPlans[part] = planPart(part, saved?.destinationId ?? "lowOrbit", attempts, 2, Date.now(), isAcademyUnlocked(computeMastery(attempts), profile.academyUnlocked));
+      partPlans[part] = planPart(part, destinationId, attempts, 2, Date.now(), isAcademyUnlocked(computeMastery(attempts), profile.academyUnlocked));
     }
     set({
       ready: true,
       profile,
       design,
-      destinationId: saved?.destinationId ?? "lowOrbit",
+      destinationId,
       partPlans,
       completedTasks: (saved?.completedTasks as Partial<Record<RocketPart, string[]>>) ?? {},
       tasksCorrect: saved?.tasksCorrect ?? 0,
@@ -133,6 +141,7 @@ export const useRocketState = create<RocketState>((set, get) => ({
 
   setDestination: (id) => {
     set({ destinationId: id });
+    localStorage.setItem("rocketlab-destination", id);
     void persistMission({ ...get(), destinationId: id });
   },
 

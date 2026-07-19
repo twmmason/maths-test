@@ -40,7 +40,9 @@ export default function PerformancePanel({ design, destinationId }: { design: Ro
       </div>
       {dest && (
         <div className="text-cyan-300/70">
-          Destination: {dest.name} (needs {dest.requiredAltitudeKm} km)
+          {dest.journey
+            ? `Destination: ${dest.name}, ${dest.journey.distance} away (${dest.journey.burnName} needs ${dest.requiredAltitudeKm.toLocaleString("en-GB")} km)`
+            : `Destination: ${dest.name} (needs ${dest.requiredAltitudeKm.toLocaleString("en-GB")} km)`}
           {p.maxAltitude >= dest.requiredAltitudeKm ? " — in range ✅" : " — not in range yet"}
         </div>
       )}
