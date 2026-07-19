@@ -1,4 +1,4 @@
- # Rocket Lab — KS3 "Astronaut Academy" Expansion (build prompt)
+# Rocket Lab — KS3 "Astronaut Academy" Expansion (build prompt)
 
 > **Give this entire document to the AI coding agent.** It extends the existing,
 > working Rocket Lab app (see `PROMPT.md` and `PROGRESS.md`) with the FULL
@@ -238,6 +238,48 @@ The Phase 7 deferral in `PROGRESS.md` is now cancelled — implement it properly
 - Tiles/atmosphere failures at runtime degrade gracefully to the current
   stylised terrain — but degradation is an error path, not the default.
 
+### 6a-ii. Cinematic launch: proper camera tracking + photorealism (REQUIRED)
+The launch sequence must look and feel like real launch footage — as
+photorealistic as the browser allows — and the camera must genuinely TRACK
+the rocket from ignition to space, never losing it:
+
+**Camera tracking (driven by the real `simulateFlight` trajectory):**
+- A small **launch director** system cuts between shots as altitude/events
+  dictate, each shot smoothly eased (lerp/damp, never snapping):
+  1. **Pad cam** — low wide shot for countdown/ignition, camera shake at T-0
+  2. **Tower cam** — close pass as the rocket clears the gantry
+  3. **Ground tracking telephoto** — the classic press-site shot: camera
+     stays planted on the ground near the pad, pitching up to follow the
+     rocket as it climbs and shrinks, terrain and sky in frame
+  4. **Chase cam** — flies alongside/behind the rocket through the cloud
+     layer, clouds streaking past, booster staging visible
+  5. **Orbit reveal** — pulls back as the sky turns black to show the Earth's
+     curve (3D Tiles terrain falling away below) and the coasting rocket
+- Every shot looks at the rocket's actual simulated position each frame —
+  if TWR is poor and the ascent is slow, the shots hold longer; the camera
+  never plays a canned path detached from the physics.
+- A small "📺 shot" indicator lets the player manually cycle cameras during
+  flight; `prefers-reduced-motion` gets a single steady tracking shot.
+
+**Photorealism (make it as good as possible):**
+- Renderer: ACES filmic tone mapping, physically correct lights, HDR
+  environment, soft shadows (PCFSoft), high-DPI aware.
+- Post-processing (via `postprocessing` / `@takram/three-geospatial-effects`):
+  bloom on the engine plume, lens flare from the sun, subtle vignette and
+  film grain, aerial-perspective haze from takram fading with altitude.
+- **Engine exhaust**: layered volumetric-style plume (bright core + expanding
+  translucent cone), plume lengthens/expands as the atmosphere thins,
+  mach-diamond hints at low altitude, particle smoke billowing across the
+  pad at ignition with a lingering steam cloud.
+- PBR rocket materials: metalness/roughness maps or procedural variation,
+  panel line normal detail, sun glinting off the hull during ascent.
+- The takram sky + clouds (§6a) and 3D Tiles terrain complete the picture —
+  launching from SaxaVord should read like a real Shetland launch video:
+  green cliffs shrinking below, cloud deck punched through, sky fading to
+  black, Earth's limb appearing.
+- Target 60fps on an Apple-Silicon MacBook; add a graphics quality toggle
+  (Cinematic/Standard) if needed to keep the Standard path smooth.
+
 ### 6b. Gemini everywhere it helps (using the §5a `PROMPT.md` client + key pool)
 - **Model line-up (match Gaudi's, verified from its source)**:
   - Text (hints/paraphrase/debrief/Chief Engineer/telemetry insights):
@@ -321,7 +363,9 @@ verify each mode end-to-end in the browser with the real keys:
    the Academy, certifying one part per new domain (Number, Algebra, Ratio,
    Geometry, Probability, Statistics) through the new widgets, flying an
    Academy destination whose report references the KS3 maths used, **real 3D
-   Tiles terrain + takram sky visible at the chosen launch site**, a live
-   Gemini hint/debrief/telemetry-insight observed working with the real keys,
-   and **both Photo and Poster render modes producing real Nano Banana
-   repaints** that land in the Flight Log scrapbook.
+   Tiles terrain + takram sky visible at the chosen launch site**, **a full
+   launch watched end-to-end with the cinematic multi-shot camera tracking
+   the rocket from pad to orbit (§6a-ii)**, a live Gemini
+   hint/debrief/telemetry-insight observed working with the real keys, and
+   **both Photo and Poster render modes producing real Nano Banana repaints**
+   that land in the Flight Log scrapbook.
