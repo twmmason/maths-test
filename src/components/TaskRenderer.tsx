@@ -49,7 +49,7 @@ const WIDGETS = {
   sampleSpace: SampleSpaceWidget,
   chart: ChartWidget,
   scaleMap: ScaleMapWidget,
-} as const;
+};
 
 export interface TaskResult {
   correct: boolean;
@@ -88,7 +88,7 @@ export default function TaskRenderer({ task, onFinished, record = true }: Props)
     setChiefQ("");
   }, [task.id]);
 
-  const Widget = WIDGETS[task.visual.widget];
+  const Widget = WIDGETS[task.visual.widget as keyof typeof WIDGETS];
   const widgetInteractive = task.visual.config.interactive === true;
 
   const submit = async (answer: string) => {
