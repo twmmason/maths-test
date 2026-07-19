@@ -9,10 +9,12 @@ interface Props {
   siteName: string;
   /** Called with the resulting image (AI repaint, or plain screenshot fallback). */
   onPhoto?: (dataUrl: string) => void;
+  /** Called with the current mode so the parent can e.g. stop camera rotation. */
+  onModeChange?: (mode: "cad" | "fast" | "quality") => void;
 }
 
 /** Mission Camera pill: Workshop (live 3D) / Photo (fast repaint) / Poster (quality repaint). */
-export default function ViewSwitcher({ getCanvas, siteName, onPhoto }: Props) {
+export default function ViewSwitcher({ getCanvas, siteName, onPhoto, onModeChange }: Props) {
   const [mode, setMode] = useState<Mode>("cad");
   const [style, setStyle] = useState<RenderStyle>("photorealistic");
   const [overlay, setOverlay] = useState<string | null>(null);
@@ -22,6 +24,7 @@ export default function ViewSwitcher({ getCanvas, siteName, onPhoto }: Props) {
     const canvas = getCanvas();
     if (!canvas || busy) return;
     setMode(m);
+    onModeChange?.(m);
     setBusy(true);
     const screenshot = canvas.toDataURL("image/png");
     const painted = hasKey() ? await generateMissionPhoto(screenshot, m === "fast" ? "fast" : "quality", style, siteName) : null;
@@ -39,6 +42,7 @@ export default function ViewSwitcher({ getCanvas, siteName, onPhoto }: Props) {
           onClick={() => {
             setMode("cad");
             setOverlay(null);
+            onModeChange?.("cad");
           }}
         >
           🛠 Workshop

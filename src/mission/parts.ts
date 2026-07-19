@@ -13,17 +13,18 @@ export function criteriaForPart(part: RocketPart, keyStage: KeyStage = "ks2"): s
 }
 
 export const PART_MATERIALS: Record<RocketPart, { color: string; roughness: number; metalness: number; opacity?: number }> = {
-  noseCone: { color: "#e8ecff", roughness: 0.3, metalness: 0.4 },
-  hull: { color: "#aab7f0", roughness: 0.5, metalness: 0.3 },
-  fuelTank: { color: "#22d3ee", roughness: 0.2, metalness: 0.1, opacity: 0.55 },
-  engine: { color: "#5b6690", roughness: 0.4, metalness: 0.6 },
-  fins: { color: "#f472b6", roughness: 0.5, metalness: 0.2 },
-  payloadBay: { color: "#a78bfa", roughness: 0.4, metalness: 0.3 },
-  electronics: { color: "#34d399", roughness: 0.35, metalness: 0.5 },
-  booster: { color: "#fbbf24", roughness: 0.45, metalness: 0.4 },
+  noseCone: { color: "#d4daf0", roughness: 0.18, metalness: 0.65 },
+  hull: { color: "#8896cc", roughness: 0.28, metalness: 0.55 },
+  fuelTank: { color: "#22d3ee", roughness: 0.12, metalness: 0.15, opacity: 0.55 },
+  engine: { color: "#4a5580", roughness: 0.22, metalness: 0.78 },
+  fins: { color: "#e0518a", roughness: 0.3, metalness: 0.35 },
+  payloadBay: { color: "#9575d4", roughness: 0.25, metalness: 0.45 },
+  electronics: { color: "#2bb880", roughness: 0.2, metalness: 0.6 },
+  booster: { color: "#e5a818", roughness: 0.25, metalness: 0.55 },
 };
 
 /** Cosmetic upgrade tint per level (Lv2 shinier, Lv3 shiniest). */
+/** Upgrade levels give shinier, more metallic materials — visible improvement over the summer. */
 export function levelMaterial(base: { color: string; roughness: number; metalness: number }, level: 1 | 2 | 3) {
   return {
     ...base,

@@ -10,6 +10,7 @@ import { DESTINATION_BY_ID } from "../../mission/destinations";
 import { simulateFlight } from "../../physics/simulateFlight";
 import { recordMission } from "../../mission/recordMission";
 import { sfx } from "../../mission/sound";
+import { useEffect as useEffectOnce } from "react";
 import type { FlightResult } from "../../physics/types";
 import type { RocketDesign } from "../../three/rocketDesign";
 import type { RocketPart } from "../../curriculum/types";
@@ -47,12 +48,20 @@ function FlyingRocket({
     }
     clockRef.current.t = Math.min(clockRef.current.t + dt * PLAYBACK_SPEED, flight.apogeeT);
     const t = clockRef.current.t;
-    // Find altitude at t
-    const i = flight.samples.findIndex((s) => s.t >= t);
-    const s = flight.samples[Math.max(0, i)] ?? flight.samples[flight.samples.length - 1];
-    clockRef.current.altKm = s?.altitude ?? 0;
+    // Lerp between flight samples for smooth motion (no snapping)
+    let alt = 0;
+    const samps = flight.samples;
+    const idx = samps.findIndex((s) => s.t >= t);
+    if (idx <= 0) {
+      alt = samps[0]?.altitude ?? 0;
+    } else {
+      const a = samps[idx - 1], b = samps[idx];
+      const frac = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0;
+      alt = a.altitude + (b.altitude - a.altitude) * frac;
+    }
+    clockRef.current.altKm = alt;
     // Scene y: log-ish scaling so the rocket visibly climbs then leaves frame
-    const y = Math.min(180, (s?.altitude ?? 0) * 3 + t * 0.4);
+    const y = Math.min(180, alt * 3 + t * 0.4);
     clockRef.current.y = y;
     shake.current = t < 4 ? Math.sin(t * 60) * 0.03 : 0;
     group.current.position.set(shake.current, y, shake.current * 0.7);
@@ -168,6 +177,12 @@ export default function LaunchPage() {
   const refreshProfile = useRocketState((s) => s.init);
 
   const [phase, setPhase] = useState<Phase>("ready");
+
+  // Ambient pad wind
+  useEffect(() => {
+    sfx.startWind();
+    return () => sfx.stopWind();
+  }, []);
   const [count, setCount] = useState(3);
   const [altReadout, setAltReadout] = useState(0);
   const [recording, setRecording] = useState(false);

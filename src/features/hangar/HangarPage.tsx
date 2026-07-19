@@ -19,6 +19,7 @@ export default function HangarPage() {
   const ks3MasteryPct = useRocketState((s) => s.ks3MasteryPct);
   const academyOpen = useRocketState((s) => s.academyOpen);
   const [showSites, setShowSites] = useState(false);
+  const [photoMode, setPhotoMode] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // First visit: pick the launch site.
@@ -34,7 +35,7 @@ export default function HangarPage() {
   return (
     <div className="relative h-full">
       <div className="absolute inset-0">
-        <RocketScene site={site} autoRotate onCanvasReady={(c) => (canvasRef.current = c)}>
+        <RocketScene site={site} autoRotate={!photoMode} onCanvasReady={(c) => (canvasRef.current = c)}>
           <Rocket3D design={design} complete partLevels={profile?.partLevels} />
         </RocketScene>
       </div>
@@ -116,7 +117,7 @@ export default function HangarPage() {
 
       {/* Mission camera */}
       <div className="absolute bottom-4 right-4 z-10">
-        <ViewSwitcher getCanvas={() => canvasRef.current} siteName={site.name} />
+        <ViewSwitcher getCanvas={() => canvasRef.current} siteName={site.name} onModeChange={(m) => setPhotoMode(m !== "cad")} />
       </div>
 
       {showSites && <SitePicker onClose={() => setShowSites(false)} />}

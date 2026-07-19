@@ -227,7 +227,7 @@ export default function Rocket3D({
             <group>
               {finPositions.map((a, i) => (
                 <group key={i} rotation={[0, -a, 0]} position={[Math.cos(a) * r * 0.98, layout.hullBottom + 0.7, Math.sin(a) * r * 0.98]}>
-                  <mesh rotation={[0, Math.PI / 2, 0]} castShadow>
+                  <mesh castShadow>
                     <extrudeGeometry
                       args={[
                         (() => {
@@ -289,11 +289,26 @@ export default function Rocket3D({
                     {m}
                   </mesh>
                   {engineFlame > 0 && (
-                    <mesh position={[0, -0.8 - engineFlame * 0.7, 0]}>
-                      <coneGeometry args={[0.24, 1.4 + engineFlame * 1.6, 12]} />
-                      <meshBasicMaterial color={engineFlame > 0.7 ? "#93c5fd" : "#fb923c"} transparent opacity={0.85} />
-                    </mesh>
+                    <group position={[0, -0.6, 0]}>
+                      {/* Bright core */}
+                      <mesh position={[0, -engineFlame * 0.5, 0]} rotation={[Math.PI, 0, 0]}>
+                        <coneGeometry args={[0.15, engineFlame * 1.8, 10]} />
+                        <meshBasicMaterial color="#fff3c4" transparent opacity={0.95} depthWrite={false} />
+                      </mesh>
+                      {/* Mid plume */}
+                      <mesh position={[0, -engineFlame * 0.9, 0]} rotation={[Math.PI, 0, 0]}>
+                        <coneGeometry args={[0.3, engineFlame * 2.8, 12]} />
+                        <meshBasicMaterial color="#fb923c" transparent opacity={0.7} depthWrite={false} />
+                      </mesh>
+                      {/* Outer glow */}
+                      <mesh position={[0, -engineFlame * 1.4, 0]} rotation={[Math.PI, 0, 0]}>
+                        <coneGeometry args={[0.45, engineFlame * 3.6, 12]} />
+                        <meshBasicMaterial color="#7db3ff" transparent opacity={0.18} depthWrite={false} />
+                      </mesh>
+                      <pointLight position={[0, -1, 0]} intensity={engineFlame * 20} distance={18} decay={2} color="#ffc46b" />
+                    </group>
                   )}
+
                 </group>
               ))}
             </group>
