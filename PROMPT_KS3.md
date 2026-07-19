@@ -239,6 +239,19 @@ The Phase 7 deferral in `PROGRESS.md` is now cancelled — implement it properly
   stylised terrain — but degradation is an error path, not the default.
 
 ### 6b. Gemini everywhere it helps (using the §5a `PROMPT.md` client + key pool)
+- **Model line-up (match Gaudi's, verified from its source)**:
+  - Text (hints/paraphrase/debrief/Chief Engineer/telemetry insights):
+    **`gemini-3.5-flash`** — Gaudi's codebase norm; upgrade Rocket Lab's
+    `MODEL` in `src/ai/gemini.ts` from `gemini-3-flash-preview` to this.
+    Use `gemini-3.1-flash-lite` only for trivial one-liners (milestone
+    flavour) where latency matters more than quality.
+  - Image fast tier (📸 Photo): **`gemini-3.1-flash-lite-image`**
+    (Gaudi's `FAST_RENDER_MODEL`).
+  - Image quality tier (🎞 Poster): **`gemini-3-pro-image-preview`**
+    (Nano Banana Pro — Gaudi's `RENDER_MODEL`).
+  - Optional launch-film flourish: **`gemini-omni-flash-preview`** (Gaudi's
+    `VIDEO_MODEL`) may generate a short cinematic launch clip from the
+    poster frame — nice-to-have, only if time allows.
 - **Adaptive hints, briefing paraphrase, debrief, Chief Engineer** all extend
   to the KS3 content — same validation guardrails (no answer leaks; the §4
   equation-display rule applies to LLM output too).
@@ -260,10 +273,11 @@ verify each mode end-to-end in the browser with the real keys:
 - **🛠 Workshop (`cad`)** — the live interactive R3F viewport (default; the
   game is always played here).
 - **📸 Photo (`fast`)** — capture the canvas as PNG (same-frame capture /
-  `preserveDrawingBuffer`) and have **`gemini-2.5-flash-image`** (a.k.a. Nano
-  Banana) repaint it photorealistically in seconds.
+  `preserveDrawingBuffer`) and have **`gemini-3.1-flash-lite-image`**
+  (Gaudi's fast render model) repaint it photorealistically in seconds.
 - **🎞 Poster (`quality`)** — capture → **`gemini-3-pro-image-preview`**
-  (Nano Banana Pro) for the high-quality mission poster.
+  (Nano Banana Pro — Gaudi's quality render model) for the high-quality
+  mission poster.
 - Prompt template must keep the rocket faithful: "Repaint this 3D render of a
   child's rocket on the launch pad at {site name} as a {style} photograph.
   Keep the rocket's shape, parts and colours exactly as shown." Include the
