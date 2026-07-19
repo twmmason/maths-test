@@ -31,7 +31,18 @@ import { Ellipsoid, Geodetic, radians } from "@takram/three-geospatial";
 import { Clouds, CloudLayer } from "@takram/three-clouds/r3f";
 import { LensFlare, Dithering } from "@takram/three-geospatial-effects/r3f";
 import { Environment } from "@react-three/drei";
-import { EffectComposer, Bloom, SMAA, ToneMapping, Vignette } from "@react-three/postprocessing";
+import {
+  EffectComposer,
+  Bloom,
+  SMAA,
+  ToneMapping,
+  Vignette,
+  BrightnessContrast,
+  HueSaturation,
+  Noise,
+} from "@react-three/postprocessing";
+import { BlendFunction } from "postprocessing";
+
 import { ToneMappingMode } from "postprocessing";
 import { TilesRenderer, TilesPlugin } from "3d-tiles-renderer/r3f";
 import { GoogleCloudAuthPlugin, ReorientationPlugin } from "3d-tiles-renderer/plugins";
@@ -304,8 +315,15 @@ export function GeoEnvironment({
         <Dithering />
         <SMAA />
         <ToneMapping mode={ToneMappingMode.AGX} />
-        <Vignette offset={0.3} darkness={0.3} />
+        {/* --- Photographic colour grade (mimics the Gemini "photo" look) ---
+            Slightly warmer, punchier, a touch more saturated + fine film
+            grain so the live view reads closer to a real camera capture. */}
+        <BrightnessContrast brightness={0.02} contrast={0.12} />
+        <HueSaturation saturation={0.12} hue={0} />
+        <Noise premultiply blendFunction={BlendFunction.OVERLAY} opacity={0.18} />
+        <Vignette offset={0.3} darkness={0.42} />
       </EffectComposer>
+
     </Atmosphere>
   );
 }

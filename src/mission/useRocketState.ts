@@ -5,7 +5,8 @@ import { db, attemptsFor, type Profile, type Attempt } from "../db/db";
 import { loadActiveProfile, getActiveProfileId, clearActiveProfileId } from "../db/seed";
 import { xpForAttempt, computeMastery, masteryPercent, masteryProgressPercent, isAcademyUnlocked, allPartLevels } from "../engine/mastery";
 import { planPart, type PartPlan } from "./runPlanner";
-import { VARIANT_BY_ID, type PartVariant } from "./partsCatalog";
+import { VARIANT_BY_ID, MATERIAL_BY_HULL, type PartVariant } from "./partsCatalog";
+
 import type { FlightResult } from "../physics/types";
 
 export interface RocketState {
@@ -207,8 +208,12 @@ export const useRocketState = create<RocketState>((set, get) => ({
     };
     if (radialCount && variant.part === "fins") design.finCount = radialCount;
     if (radialCount && variant.part === "booster") design.boosterCount = radialCount;
+    // Attaching a hull sets the whole vehicle's material finish (unlocked by
+    // hull mastery level: aluminium → titanium → carbon → gold).
+    if (variant.part === "hull" && MATERIAL_BY_HULL[variantId]) design.material = MATERIAL_BY_HULL[variantId];
     const partPlans = { ...state.partPlans, [variant.part]: planPart(variant.part, state.destinationId, attempts, 2, Date.now(), state.academyOpen) };
     const completedTasks = { ...state.completedTasks, [variant.part]: [] };
+
     set({ design, partPlans, completedTasks, selectedPart: variant.part, installingPart: variant.part });
     await persistDesign(design);
     await persistMission({ ...get(), design });

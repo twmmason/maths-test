@@ -33,3 +33,39 @@ export function levelMaterial(base: { color: string; roughness: number; metalnes
     metalness: Math.min(1, base.metalness + (level - 1) * 0.2),
   };
 }
+
+export type HullMaterial = "aluminium" | "titanium" | "carbon" | "gold";
+
+/** Vehicle-wide material finish unlocked by hull mastery. Each finish tints the
+ *  whole airframe and changes how metallic/rough it looks — a clear visual
+ *  reward for reaching harder destinations. */
+export const MATERIAL_FINISH: Record<HullMaterial, { tint: string; roughness: number; metalness: number; label: string }> = {
+  aluminium: { tint: "#eaedf2", roughness: 0.0, metalness: 0.0, label: "Aluminium" },
+  titanium: { tint: "#c7ccd6", roughness: -0.04, metalness: 0.18, label: "Titanium" },
+  carbon: { tint: "#3a3f4a", roughness: 0.06, metalness: 0.3, label: "Carbon-fibre" },
+  gold: { tint: "#e8b23a", roughness: -0.06, metalness: 0.45, label: "Gold foil" },
+};
+
+/** Blend a part's base colour toward the vehicle material tint (keeps each part
+ *  distinct while giving the whole ship a coherent finish). */
+export function applyMaterial(
+  base: { color: string; roughness: number; metalness: number },
+  material: HullMaterial,
+): { color: string; roughness: number; metalness: number } {
+  const f = MATERIAL_FINISH[material];
+  const mix = (a: string, b: string, t: number) => {
+    const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    const ar = (pa >> 16) & 255, ag = (pa >> 8) & 255, ab = pa & 255;
+    const br = (pb >> 16) & 255, bg = (pb >> 8) & 255, bb = pb & 255;
+    const r = Math.round(ar + (br - ar) * t);
+    const g = Math.round(ag + (bg - ag) * t);
+    const bl = Math.round(ab + (bb - ab) * t);
+    return `#${((1 << 24) | (r << 16) | (g << 8) | bl).toString(16).slice(1)}`;
+  };
+  return {
+    color: mix(base.color, f.tint, material === "aluminium" ? 0 : 0.45),
+    roughness: Math.max(0.04, base.roughness + f.roughness),
+    metalness: Math.min(1, base.metalness + f.metalness),
+  };
+}
+

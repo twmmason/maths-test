@@ -30,8 +30,10 @@ export const TUNING_BY_PART: Record<RocketPart, TuneSpec[]> = {
   ],
   fins: [
     { key: "finAngle", label: "Cant angle trim", min: -12, max: 12, step: 0.5, unit: "°", hint: "angles — past ±4° the fins shear off at max-Q", safeMin: -4, safeMax: 4 },
-    { key: "finCount", label: "Fin count", min: 0, max: 6, step: 1, unit: "", hint: "symmetry — 3+ symmetric fins keep it stable", safeMin: 3 },
+    { key: "finCount", label: "Fin count", min: 0, max: 8, step: 1, unit: "", hint: "symmetry — 3+ symmetric fins keep it stable", safeMin: 3 },
+    { key: "finSpan", label: "Fin span", min: 0.7, max: 1.8, step: 0.05, unit: "×", hint: "measurement — bigger fins add drag but more stability" },
   ],
+
   hull: [
     { key: "hullHeight", label: "Hull height", min: 3, max: 12, step: 0.5, unit: "m", hint: "measurement — more hull, more fuel, more mass" },
     { key: "hullIntegrity", label: "Panel bolting", min: 0.1, max: 1, step: 0.05, unit: "", hint: "multiplication — under 50% ⇒ breakup at max-Q", percent: true, safeMin: 0.5 },
@@ -49,9 +51,11 @@ export const TUNING_BY_PART: Record<RocketPart, TuneSpec[]> = {
     { key: "cgOffset", label: "CG trim", min: -0.8, max: 0.8, step: 0.05, unit: "", hint: "fractions — an uneven split pitches it over", percent: true, safeMin: -0.45, safeMax: 0.45 },
   ],
   booster: [
-    { key: "boosterCount", label: "Boosters", min: 0, max: 4, step: 1, unit: "", hint: "addition — extra thrust, staged away mid-flight" },
+    { key: "boosterCount", label: "Boosters", min: 0, max: 8, step: 1, unit: "", hint: "addition — extra thrust, staged away mid-flight" },
+    { key: "boosterSize", label: "Booster size", min: 0.8, max: 1.8, step: 0.05, unit: "×", hint: "measurement — taller, fatter boosters carry more solid fuel" },
     { key: "boosterStageT", label: "Staging timer trim", min: -1, max: 1, step: 0.05, unit: "", hint: "arithmetic — wrong timer ⇒ boosters hit the core", percent: true, safeMin: -0.25, safeMax: 0.25 },
   ],
+
 };
 
 function isOffSpec(spec: TuneSpec, value: number): boolean {

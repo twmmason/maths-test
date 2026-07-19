@@ -41,12 +41,17 @@ export interface RocketDesign {
   finCount: number;
   finAngle: number; // degrees
   finSymmetry: boolean;
+  finSpan: number; // relative fin size multiplier (1 = standard)
   payloadPods: number;
   payloadPerPod: number; // kg
   circuitsWired: number;
   powerBalanced: boolean;
   boosterCount: number;
+  boosterSize: number; // relative booster size multiplier (1 = standard)
+  /** Cosmetic hull/part material finish, unlocked by mastery level. */
+  material: "aluminium" | "titanium" | "carbon" | "gold";
   // ── Wrench Time configuration fields (written by install-step maths) ──
+
   /** Engine gimbal misalignment in degrees. 0 = true. ≥3° = veer off course. */
   engineGimbalOffset: number;
   /** Hull structural integrity 0..1. <0.5 = breakup at max-Q. */
@@ -72,12 +77,16 @@ export const DEFAULT_DESIGN: RocketDesign = {
   finCount: 4,
   finAngle: 0,
   finSymmetry: true,
+  finSpan: 1,
   payloadPods: 4,
   payloadPerPod: 60,
   circuitsWired: 0,
   powerBalanced: false,
   boosterCount: 0,
+  boosterSize: 1,
+  material: "aluminium",
   engineGimbalOffset: 0,
+
   hullIntegrity: 1,
   cgOffset: 0,
   boosterStageT: 0,

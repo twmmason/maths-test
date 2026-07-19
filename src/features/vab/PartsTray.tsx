@@ -5,6 +5,8 @@ import { PART_STRANDS } from "../../mission/parts";
 import { STAGES } from "../../mission/stages";
 import { useRocketState } from "../../mission/useRocketState";
 import { sfx } from "../../mission/sound";
+import { isDebugMode } from "../../debug";
+
 
 export default function PartsTray() {
   const [tab, setTab] = useState<RocketPart>("hull");
@@ -15,9 +17,16 @@ export default function PartsTray() {
   const detachPart = useRocketState((s) => s.detachPart);
 
   const installed = design.installedParts[tab];
-  // All parts available — the maths gates certification, not the catalogue
-  const level = 3 as 1 | 2 | 3;
+  // Better parts need harder maths: a variant's `unlockLevel` (1–3) is gated by
+  // the player's mastery LEVEL in this part's strand (profile.partLevels[tab],
+  // derived from their answers). Level 1 to start; tier-2/3 questions — the ones
+  // harder destinations pull — raise it and unlock the bigger, cooler, more
+  // powerful parts (Titan/Leviathan hulls, Raptor cluster, Cryo tank, Grid fins…).
+  // Debug mode unlocks everything (test any combo without doing the maths).
+  const level = (isDebugMode() ? 3 : (profile?.partLevels?.[tab] ?? 1)) as 1 | 2 | 3;
   const radialCategory = tab === "fins" || tab === "booster";
+
+
 
   return (
     <div className="h-full flex flex-col hud-panel overflow-hidden">
@@ -115,7 +124,13 @@ function VariantCard({ variant, locked, installed, onAttach }: { variant: PartVa
         )}
       </div>
       <div className="text-[11px] text-slate-400 mt-0.5">{variant.description}</div>
+      {locked && (
+        <div className="text-[10px] text-amber-300/90 mt-1">
+          🔒 Reach mastery level {variant.unlockLevel} in this part's maths (answer the harder mission questions) to unlock.
+        </div>
+      )}
       <div className="mt-1 flex flex-wrap gap-1">
+
         {statLines.map((s) => (
           <span key={s} className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-300/90">
             {s}

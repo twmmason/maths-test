@@ -3,6 +3,19 @@ import { Environment, OrbitControls, Stars } from "@react-three/drei";
 import { Suspense, useRef, useState, type ReactNode, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { ACESFilmicToneMapping } from "three";
+import {
+  EffectComposer,
+  Bloom,
+  SMAA,
+  ToneMapping,
+  Vignette,
+  BrightnessContrast,
+  HueSaturation,
+  Noise,
+  DepthOfField,
+} from "@react-three/postprocessing";
+import { BlendFunction, ToneMappingMode } from "postprocessing";
+
 import type { LaunchSite } from "../mission/launchSites";
 import { TERRAIN_COLORS } from "../mission/launchSites";
 import { GeoEnvironment, HAS_MAPS_KEY } from "./GeoEnvironment";
@@ -155,15 +168,25 @@ function FollowTarget({
   controlsRef: MutableRefObject<any>;
   trackTarget: MutableRefObject<{ y: number; x?: number; z?: number }>;
 }) {
-  useFrame(() => {
+  const prev = useRef<THREE.Vector3 | null>(null);
+  useFrame(({ camera }) => {
     const c = controlsRef.current;
     const t = trackTarget.current;
     if (!c || !t) return;
-    c.target.set(t.x ?? 0, t.y + 4 * VEHICLE_SCALE, t.z ?? 0);
+    const next = new THREE.Vector3(t.x ?? 0, t.y + 4 * VEHICLE_SCALE, t.z ?? 0);
+    // Move the CAMERA by the same delta the target moved, so the user's chosen
+    // offset (distance + angle from dragging) is preserved and the camera
+    // rigidly follows the rocket — no lag even under heavy time-warp.
+    if (prev.current) {
+      camera.position.add(next.clone().sub(prev.current));
+    }
+    prev.current = next.clone();
+    c.target.copy(next);
     c.update();
   });
   return null;
 }
+
 
 export interface RocketSceneProps {
   children: ReactNode;
@@ -243,8 +266,25 @@ export default function RocketScene({
               {children}
             </group>
           </Suspense>
+          {/* Photographic post-processing so the stylised Workshop view reads
+              closer to the AI "photo" look: bloom on bright metal/exhaust, a
+              filmic tone-map, a warm+punchy colour grade, subtle depth-of-field
+              and fine film grain. Deterministic, 60fps, zero API cost. */}
+          {!reducedMotion && (
+            <EffectComposer multisampling={0}>
+              <Bloom intensity={0.5} luminanceThreshold={0.85} luminanceSmoothing={0.3} mipmapBlur />
+              <DepthOfField focusDistance={0.02} focalLength={0.05} bokehScale={2} />
+              <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+              <BrightnessContrast brightness={0.02} contrast={0.14} />
+              <HueSaturation saturation={0.14} hue={0} />
+              <Noise premultiply blendFunction={BlendFunction.OVERLAY} opacity={0.18} />
+              <Vignette offset={0.3} darkness={0.45} />
+              <SMAA />
+            </EffectComposer>
+          )}
         </>
       )}
+
       {controlsEnabled && (
         <CameraRig focusY={focusY === null ? null : focusY * VEHICLE_SCALE} distance={cameraDistance * VEHICLE_SCALE} controlsRef={controlsRef} />
       )}

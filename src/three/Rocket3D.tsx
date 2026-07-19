@@ -2,7 +2,8 @@ import { useState, useMemo, type ReactElement } from "react";
 import * as THREE from "three";
 import type { RocketDesign } from "./rocketDesign";
 import type { RocketPart } from "../curriculum/types";
-import { PART_MATERIALS, levelMaterial } from "../mission/parts";
+import { PART_MATERIALS, levelMaterial, applyMaterial } from "../mission/parts";
+
 
 export interface RocketLayout {
   hullBottom: number;
@@ -39,10 +40,12 @@ interface PartProps {
   draft?: boolean;
   selected?: boolean;
   level?: 1 | 2 | 3;
+  material?: RocketDesign["material"];
   interactive?: boolean;
   onSelect?: (part: RocketPart) => void;
   children: (material: ReactElement) => ReactElement;
 }
+
 
 /** Procedural panel-line normal map via canvas (cached globally). */
 const panelNormalMap = (() => {
@@ -65,10 +68,12 @@ const panelNormalMap = (() => {
   return tex;
 })();
 
-function Part({ part, draft, selected, level = 1, interactive, onSelect, children }: PartProps) {
+function Part({ part, draft, selected, level = 1, material: finish = "aluminium", interactive, onSelect, children }: PartProps) {
   const [hovered, setHovered] = useState(false);
   const base = PART_MATERIALS[part];
-  const mat = levelMaterial(base, level);
+  // Level bumps shininess; the vehicle material re-tints the whole airframe.
+  const mat = applyMaterial(levelMaterial(base, level), finish);
+
   const isTransparent = draft || base.opacity !== undefined;
   const material = (
     <meshPhysicalMaterial
@@ -152,9 +157,15 @@ export default function Rocket3D({
     draft: isDraft(part),
     selected: selectedPart === part,
     level: partLevels[part] ?? 1,
+    material: design.material,
     interactive,
     onSelect: onSelectPart,
   });
+
+  // Higher-tier fins/boosters are physically bigger (set by the variant).
+  const finSpan = design.finSpan ?? 1;
+  const boosterSize = design.boosterSize ?? 1;
+
 
   return (
     <group>
@@ -280,9 +291,10 @@ export default function Rocket3D({
           {(m) => (
             <group>
               {finPositions.map((a, i) => (
-                <group key={i} rotation={[0, -a, 0]} position={[Math.cos(a) * r * 0.98, layout.hullBottom + 0.7, Math.sin(a) * r * 0.98]}>
+                <group key={i} rotation={[0, -a, 0]} position={[Math.cos(a) * r * 0.98, layout.hullBottom + 0.7, Math.sin(a) * r * 0.98]} scale={[finSpan, finSpan, 1]}>
                   <mesh castShadow>
                     <extrudeGeometry
+
                       args={[
                         (() => {
                           const s = new THREE.Shape();
@@ -311,17 +323,21 @@ export default function Rocket3D({
           {(m) => (
             <group>
               {boosterPositions.map((a, i) => (
-                <group key={i} position={[Math.cos(a) * r * 1.5, layout.hullBottom + 1.1, Math.sin(a) * r * 1.5]}>
+                <group
+                  key={i}
+                  position={[Math.cos(a) * r * (1.5 + (boosterSize - 1) * 0.35), layout.hullBottom + 1.1, Math.sin(a) * r * (1.5 + (boosterSize - 1) * 0.35)]}
+                >
                   <mesh castShadow>
-                    <cylinderGeometry args={[0.28, 0.32, 2.6, 16]} />
+                    <cylinderGeometry args={[0.28 * boosterSize, 0.32 * boosterSize, 2.6 * boosterSize, 16]} />
                     {m}
                   </mesh>
-                  <mesh position={[0, 1.55, 0]}>
-                    <coneGeometry args={[0.28, 0.5, 16]} />
+                  <mesh position={[0, 1.55 * boosterSize, 0]}>
+                    <coneGeometry args={[0.28 * boosterSize, 0.5 * boosterSize, 16]} />
                     {m}
                   </mesh>
                 </group>
               ))}
+
             </group>
           )}
         </Part>

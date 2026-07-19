@@ -234,110 +234,8 @@ function OrbitRevealCam({
   return null;
 }
 
-// NOTE: module-local (not exported) so Vite Fast Refresh keeps working —
-// mixing component and non-component exports breaks HMR for this file.
-const SHOT_NAMES = ["📺 Pad Cam", "📺 Tower Cam", "📺 Tracking Cam", "📺 Chase Cam", "📺 Orbit Cam", "🎥 Free Cam (drag to look)"] as const;
-const FREE_CAM = 5;
-
-/** Launch director: pick the shot from the rocket's ACTUAL simulated state —
- *  slow ascents naturally hold each shot longer (altitude-driven cuts). */
-function directShot(t: number, y: number): number {
-  // y is WORLD height; the vehicle rig is scaled by VEHICLE_SCALE.
-  if (t < 2 || y < 4 * VEHICLE_SCALE) return 0; // pad cam — countdown + ignition
-  if (y < 22 * VEHICLE_SCALE) return 1; // tower cam — clearing the gantry
-  if (y < 80 * VEHICLE_SCALE) return 2; // ground tracking telephoto
-  if (y < 150 * VEHICLE_SCALE) return 3; // chase cam through the clouds
-  return 4; // orbit reveal
-}
-
-/** Multi-shot cinematic camera (§6a-ii): every shot looks at the rocket's
- *  simulated position each frame; moves are damped, never snapped. */
-function LaunchDirector({
-  clockRef,
-  active,
-  shotOverride,
-  onShot,
-}: {
-  clockRef: React.MutableRefObject<{ t: number; altKm: number; y: number }>;
-  active: boolean;
-  shotOverride: number | null;
-  onShot: (label: string) => void;
-}) {
-  const camPos = useRef(new THREE.Vector3(9, 6, 11));
-  const camLook = useRef(new THREE.Vector3(0, 4, 0));
-  const activeShot = useRef(-1);
-  const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-
-  useFrame((state, dt) => {
-    if (!active) return;
-    const { t, y } = clockRef.current;
-    const rocketMid = new THREE.Vector3(0, y + 4 * VEHICLE_SCALE, 0);
-    const shot = reducedMotion ? 2 : shotOverride ?? directShot(t, y);
-    const cut = shot !== activeShot.current;
-    if (cut) {
-      activeShot.current = shot;
-      onShot(SHOT_NAMES[shot]);
-    }
-    // Free Cam: hand control to OrbitControls — the director stands down.
-    if (shot === FREE_CAM) return;
-
-    const cam = state.camera as THREE.PerspectiveCamera;
-    let targetPos: THREE.Vector3;
-    let targetFov = 40;
-    const S = VEHICLE_SCALE;
-    switch (shot) {
-      case 0: // pad cam — low wide shot
-        targetPos = new THREE.Vector3(15 * S, 2 * S, 18 * S);
-        targetFov = 45;
-        break;
-      case 1: // tower cam — close pass at the gantry
-        targetPos = new THREE.Vector3(6 * S, 11 * S, 7 * S);
-        targetFov = 42;
-        break;
-      case 2: // ground tracking telephoto — planted press-site shot
-        targetPos = new THREE.Vector3(42 * S, 2.5 * S, 48 * S);
-        targetFov = Math.max(10, 34 - (y / S) * 0.18);
-        break;
-      case 3: // chase cam — alongside through the cloud layer
-        targetPos = new THREE.Vector3(8 * S, y + 1 * S, 10 * S);
-        targetFov = 45;
-        break;
-      default: // orbit reveal — pull back as the sky turns black
-        targetPos = new THREE.Vector3(38 * S, y + 14 * S, 46 * S);
-        targetFov = 50;
-    }
-
-    // Real broadcasts CUT between cameras (no impossible swooping moves):
-    // snap position + framing on a cut, damp only within the shot.
-    const k = 1 - Math.exp(-2.6 * dt);
-    if (cut) {
-      camPos.current.copy(targetPos);
-      camLook.current.copy(rocketMid);
-    } else {
-      camPos.current.lerp(targetPos, k);
-      camLook.current.lerp(rocketMid, Math.min(1, k * 2));
-    }
-    // Rule-of-thirds: bias the framing so the rocket rides the lower third
-    // with sky ahead of it — lead increases as it speeds away.
-    camLook.current.y += Math.min(6 * S, 1.5 * S + y * 0.03) * k;
-    // Never sink the camera below the pad apron.
-    camPos.current.y = Math.max(1.2 * S, camPos.current.y);
-    // Camera shake: strong at ignition, medium during burn, off in coast
-    const burnRatio = clockRef.current.t < 2 ? 1 : clockRef.current.altKm < 5 ? 0.6 : 0.15;
-    const shakeIntensity = t < 2 ? 0.4 : t < clockRef.current.t && clockRef.current.t < 999 ? 0.12 * burnRatio : 0;
-    cam.position.set(
-      camPos.current.x + (Math.sin(t * 53) * 0.5 + Math.sin(t * 127) * 0.5) * shakeIntensity,
-      camPos.current.y + (Math.sin(t * 71) * 0.5 + Math.cos(t * 89) * 0.5) * shakeIntensity,
-      camPos.current.z + Math.sin(t * 97) * shakeIntensity * 0.3,
-    );
-    cam.lookAt(camLook.current);
-    cam.fov += (targetFov - cam.fov) * k;
-    cam.updateProjectionMatrix();
-  });
-  return null;
-}
-
 export default function LaunchPage() {
+
   const navigate = useNavigate();
   const profile = useRocketState((s) => s.profile);
   const design = useRocketState((s) => s.design);
@@ -363,9 +261,8 @@ export default function LaunchPage() {
   const [flash, setFlash] = useState(false);
   const firedEvents = useRef(new Set<number>());
   const [recording, setRecording] = useState(false);
-  const [shotOverride, setShotOverride] = useState<number | null>(null);
-  const [shotLabel, setShotLabel] = useState("📺 Auto director");
   const [userCam, setUserCam] = useState(false);
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const clockRef = useRef<{ t: number; altKm: number; y: number; x?: number; z?: number; warp?: number }>({ t: 0, altKm: 0, y: 0 });
   const [destruct, setDestruct] = useState<{ t: number; altKm: number } | null>(null);
@@ -375,6 +272,7 @@ export default function LaunchPage() {
   const savedRef = useRef(false);
 
   const site = SITE_BY_ID[profile?.launchSiteId ?? "canaveral"];
+
   const dest = DESTINATION_BY_ID[destinationId];
   const quality = tasksTotal > 0 ? tasksCorrect / tasksTotal : 1;
   const liveFlight = useMemo(() => {
@@ -586,8 +484,9 @@ export default function LaunchPage() {
   // Camera description based on current shot
   const cameraDescForShot = (alt: number): string => {
     if (orbitView) return "wide orbital shot, camera circling the rocket with Earth's horizon below";
-    if (shotOverride === FREE_CAM || (phase !== "flight" && phase !== "countdown")) return "free camera, user-positioned angle";
+    if (phase !== "flight" && phase !== "countdown") return "free camera, user-positioned angle";
     if (alt < 0.5) return `low wide-angle shot from about ${Math.round(60 * VEHICLE_SCALE)} metres away, looking up at the rocket on its pad`;
+
     if (alt < 2) return "tower camera, close shot from beside the gantry looking along the rocket as it clears the tower";
     if (alt < 15) return "ground-based telephoto tracking camera, rocket small against the sky, zoomed in from far away";
     if (alt < 80) return "chase camera flying alongside the rocket through the cloud layer, close-up";
@@ -613,25 +512,21 @@ export default function LaunchPage() {
     timeOfDay: todLabel,
   };
 
-  // Any drag/scroll on the scene hands the camera to the user — even mid-launch.
-  // The free cam keeps tracking the rocket, but rotation & zoom are all theirs.
+  // Only the final orbit view hands the camera to the user on interaction.
   const takeCamera = () => {
-    if (phase === "flight" && shotOverride !== FREE_CAM) {
-      setShotOverride(FREE_CAM);
-      setShotLabel(SHOT_NAMES[FREE_CAM]);
-    }
     if (orbitView && !userCam) setUserCam(true);
   };
 
   return (
+
     <div className="relative h-full">
-      <div className="absolute inset-0" onPointerDown={takeCamera} onWheel={takeCamera}>
+      <div className="absolute inset-0" onPointerDown={takeCamera}>
         <RocketScene
           site={site}
           skyColor={skyColor}
           towerRetracted={phase !== "ready"}
           cameraDistance={16}
-          controlsEnabled={orbitView ? userCam : phase !== "flight" || shotOverride === FREE_CAM}
+          controlsEnabled={orbitView ? userCam : true}
           trackTarget={phase === "flight" || phase === "done" ? clockRef : null}
           onCanvasReady={(c) => (canvasRef.current = c)}
         >
@@ -645,15 +540,11 @@ export default function LaunchPage() {
             orbit={orbitView}
             orbitAltKm={flight.maxAltitudeKm}
           />
-          <LaunchDirector
-            clockRef={clockRef}
-            active={phase === "flight"}
-            shotOverride={shotOverride}
-            onShot={(l) => setShotLabel(shotOverride === null ? `${l} (auto)` : l)}
-          />
           <OrbitRevealCam clockRef={clockRef} active={orbitView && !userCam} />
         </RocketScene>
       </div>
+
+
 
       {/* Mission camera pill + photo overlay (time pauses in photo/poster) */}
       <MissionCamera
@@ -680,24 +571,11 @@ export default function LaunchPage() {
       )}
       <div className="absolute top-4 right-4 flex gap-2 z-10">
         {phase === "flight" && (
-          <button
-            className="btn-ghost !px-3 !py-1 text-xs"
-            onClick={() =>
-              setShotOverride((cur) => {
-                const next = cur === null ? 0 : cur + 1;
-                if (next >= SHOT_NAMES.length) {
-                  setShotLabel("📺 Auto director");
-                  return null;
-                }
-                setShotLabel(SHOT_NAMES[next]);
-                return next;
-              })
-            }
-          >
-            {shotLabel} — switch
-          </button>
+          <div className="btn-ghost !px-3 !py-1 text-xs pointer-events-none">📺 Follow cam — drag to orbit, scroll to zoom</div>
+
         )}
         <button className={`btn-ghost !px-3 !py-1 text-xs ${recording ? "!border-red-400 !text-red-300" : ""}`} onClick={toggleRecording}>
+
           {recording ? "⏹ Stop film" : "🎬 Record launch film"}
         </button>
         <button className="btn-ghost !px-3 !py-1 text-xs" onClick={() => navigate("/vab")}>← VAB</button>
