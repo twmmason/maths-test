@@ -46,7 +46,9 @@ import { BlendFunction } from "postprocessing";
 import { ToneMappingMode } from "postprocessing";
 import { TilesRenderer, TilesPlugin } from "3d-tiles-renderer/r3f";
 import { GoogleCloudAuthPlugin, ReorientationPlugin } from "3d-tiles-renderer/plugins";
+import MotionBlur from "./MotionBlur";
 import type { LaunchSite } from "../mission/launchSites";
+
 
 export const GOOGLE_MAPS_API_KEY =
   (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined) ?? "";
@@ -197,11 +199,29 @@ function SiteTiles({ site }: { site: LaunchSite }) {
     });
   }, []);
 
+  // Crank tile caches + streaming queues so the finest photogrammetry tiles
+  // stay resident and stream in fast (otherwise fine tiles get evicted and
+  // you fall back to blocky low-LOD terrain/trees).
+  const handleTilesRef = useCallback((tiles: any) => {
+    if (!tiles) return;
+    if (tiles.lruCache) {
+      tiles.lruCache.minSize = 2000;
+      tiles.lruCache.maxSize = 4000;
+      tiles.lruCache.minBytesSize = 512 * 1024 * 1024; // 512 MB
+      tiles.lruCache.maxBytesSize = 1024 * 1024 * 1024; // 1 GB
+    }
+    if (tiles.downloadQueue) tiles.downloadQueue.maxJobs = 24;
+    if (tiles.parseQueue) tiles.parseQueue.maxJobs = 12;
+  }, []);
+
   if (!HAS_MAPS_KEY || disabled) return null;
   return (
     <TilesErrorBoundary>
       <group>
-        <TilesRenderer errorTarget={12} onLoadModel={handleLoadModel}>
+        {/* errorTarget 0 = always refine to the finest LOD Google serves
+            (full photogrammetry detail; 12 produced blocky terrain/trees). */}
+        <TilesRenderer ref={handleTilesRef} errorTarget={0} onLoadModel={handleLoadModel}>
+
           <TilesPlugin
             plugin={GoogleCloudAuthPlugin}
             args={[{ apiToken: GOOGLE_MAPS_API_KEY, autoRefreshToken: true }]}
@@ -229,8 +249,11 @@ export interface GeoEnvironmentProps {
   solarHour?: number;
   /** Volumetric cloud layer on/off (reduced-motion turns it off). */
   clouds?: boolean;
+  /** Screen-space camera motion blur (launch ascent). */
+  motionBlur?: boolean;
   children?: ReactNode;
 }
+
 
 /**
  * Wraps the rocket scene in the takram atmosphere: physically-based sky,
@@ -241,8 +264,10 @@ export function GeoEnvironment({
   site,
   solarHour = 14,
   clouds = true,
+  motionBlur = false,
   children,
 }: GeoEnvironmentProps) {
+
   const atmosphereRef = useRef<AtmosphereApi>(null);
   const sunDate = useMemo(() => dateFromSolarHour(solarHour, site.lon), [solarHour, site.lon]);
   // 0 at night → 1 at solar noon: scales every non-physical fill light so
@@ -322,7 +347,9 @@ export function GeoEnvironment({
         <HueSaturation saturation={0.12} hue={0} />
         <Noise premultiply blendFunction={BlendFunction.OVERLAY} opacity={0.18} />
         <Vignette offset={0.3} darkness={0.42} />
+        {motionBlur ? <MotionBlur intensity={1.4} samples={10} /> : <></>}
       </EffectComposer>
+
 
     </Atmosphere>
   );

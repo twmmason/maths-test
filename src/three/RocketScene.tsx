@@ -15,6 +15,8 @@ import {
   DepthOfField,
 } from "@react-three/postprocessing";
 import { BlendFunction, ToneMappingMode } from "postprocessing";
+import MotionBlur from "./MotionBlur";
+
 
 import type { LaunchSite } from "../mission/launchSites";
 import { TERRAIN_COLORS } from "../mission/launchSites";
@@ -208,7 +210,10 @@ export interface RocketSceneProps {
   trackTarget?: MutableRefObject<{ y: number; x?: number; z?: number }> | null;
   /** Volumetric exhaust smoke at pad level (launch mode). */
   exhaustSmoke?: boolean;
+  /** Screen-space camera motion blur (launch ascent). */
+  motionBlur?: boolean;
 }
+
 
 export default function RocketScene({
   children,
@@ -224,7 +229,9 @@ export default function RocketScene({
   solarHour,
   controlsEnabled = true,
   trackTarget = null,
+  motionBlur = false,
 }: RocketSceneProps) {
+
   const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const controlsRef = useRef<any>(null);
   const geoActive = geo && HAS_MAPS_KEY && Boolean(site);
@@ -236,7 +243,8 @@ export default function RocketScene({
       shadows
       dpr={[1, 2]}
       gl={{ antialias: true, toneMapping: ACESFilmicToneMapping, preserveDrawingBuffer: true }}
-      camera={{ position: [9 * VEHICLE_SCALE, 6 * VEHICLE_SCALE, 11 * VEHICLE_SCALE], fov: 40, near: 0.5, far: 2_500_000 }}
+      camera={{ position: [16 * VEHICLE_SCALE, 11 * VEHICLE_SCALE, 20 * VEHICLE_SCALE], fov: 40, near: 0.5, far: 2_500_000 }}
+
       onCreated={({ gl }) => {
         gl.domElement.addEventListener("webglcontextlost", (e) => e.preventDefault());
         onCanvasReady?.(gl.domElement);
@@ -244,8 +252,9 @@ export default function RocketScene({
     >
       {geoActive && site ? (
         <Suspense fallback={null}>
-          <GeoEnvironment site={site} solarHour={hour} clouds={!reducedMotion}>
+          <GeoEnvironment site={site} solarHour={hour} clouds={!reducedMotion} motionBlur={motionBlur}>
             <group scale={VEHICLE_SCALE}>
+
               {showPad && <Launchpad site={site} towerRetracted={towerRetracted} ground={false} />}
               {children}
             </group>
@@ -279,8 +288,11 @@ export default function RocketScene({
               <HueSaturation saturation={0.14} hue={0} />
               <Noise premultiply blendFunction={BlendFunction.OVERLAY} opacity={0.18} />
               <Vignette offset={0.3} darkness={0.45} />
+              {motionBlur ? <MotionBlur intensity={1} samples={8} /> : <></>}
               <SMAA />
+
             </EffectComposer>
+
           )}
         </>
       )}
@@ -297,7 +309,7 @@ export default function RocketScene({
           maxDistance={1_000_000}
           autoRotate={autoRotate && !reducedMotion}
           autoRotateSpeed={0.6}
-          target={[0, 4 * VEHICLE_SCALE, 0]}
+          target={[0, 6 * VEHICLE_SCALE, 0]}
         />
       )}
       {controlsEnabled && trackTarget && <FollowTarget controlsRef={controlsRef} trackTarget={trackTarget} />}

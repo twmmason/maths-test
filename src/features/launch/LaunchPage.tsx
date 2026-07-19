@@ -12,6 +12,7 @@ import { recordMission } from "../../mission/recordMission";
 import { sfx } from "../../mission/sound";
 import { ExplosionFX, shatterObject, type Shard } from "../../three/ExplosionFX";
 import TimeOfDaySlider from "../../components/TimeOfDaySlider";
+
 import MissionCamera from "../../components/MissionCamera";
 import { useEffect as useEffectOnce } from "react";
 import type { FlightResult } from "../../physics/types";
@@ -167,22 +168,10 @@ function FlyingRocket({
   });
 
 
-  // Pad smoke: billowing exhaust cloud at ground level (animated mesh approach)
-  const [smokeParticles] = useState(() => 
-    Array.from({ length: 16 }, (_, i) => ({
-      id: i,
-      angle: (i / 16) * Math.PI * 2 + Math.random() * 0.5,
-      delay: i * 0.15 + Math.random() * 0.1,
-      speed: 1.2 + Math.random() * 0.8,
-      riseSpeed: 0.15 + Math.random() * 0.2,
-      maxR: 3 + Math.random() * 2,
-      yOff: Math.random() * 0.4,
-    }))
-  );
-
   return (
     <>
       {!exploded && (
+
         <group ref={group}>
           <Rocket3D
             design={design}
@@ -527,8 +516,10 @@ export default function LaunchPage() {
           towerRetracted={phase !== "ready"}
           cameraDistance={16}
           controlsEnabled={orbitView ? userCam : true}
+          motionBlur={phase === "flight"}
           trackTarget={phase === "flight" || phase === "done" ? clockRef : null}
           onCanvasReady={(c) => (canvasRef.current = c)}
+
         >
           <FlyingRocket
             design={design}
@@ -541,7 +532,9 @@ export default function LaunchPage() {
             orbitAltKm={flight.maxAltitudeKm}
           />
           <OrbitRevealCam clockRef={clockRef} active={orbitView && !userCam} />
+
         </RocketScene>
+
       </div>
 
 
