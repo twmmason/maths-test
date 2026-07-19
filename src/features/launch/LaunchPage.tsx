@@ -30,7 +30,7 @@ function FlyingRocket({
   design: RocketDesign;
   flight: FlightResult;
   playing: boolean;
-  clockRef: React.MutableRefObject<{ t: number; altKm: number }>;
+  clockRef: React.MutableRefObject<{ t: number; altKm: number; y: number }>;
   partLevels?: Partial<Record<RocketPart, 1 | 2 | 3>>;
 }) {
   const group = useRef<THREE.Group>(null);
@@ -53,6 +53,7 @@ function FlyingRocket({
     clockRef.current.altKm = s?.altitude ?? 0;
     // Scene y: log-ish scaling so the rocket visibly climbs then leaves frame
     const y = Math.min(180, (s?.altitude ?? 0) * 3 + t * 0.4);
+    clockRef.current.y = y;
     shake.current = t < 4 ? Math.sin(t * 60) * 0.03 : 0;
     group.current.position.set(shake.current, y, shake.current * 0.7);
     const wantStaged = !!stagingEvent && t >= stagingEvent.t;
@@ -74,6 +75,87 @@ function FlyingRocket({
   );
 }
 
+export const SHOT_NAMES = ["📺 Pad Cam", "📺 Tower Cam", "📺 Tracking Cam", "📺 Chase Cam", "📺 Orbit Cam"] as const;
+
+/** Launch director: pick the shot from the rocket's ACTUAL simulated state —
+ *  slow ascents naturally hold each shot longer (altitude-driven cuts). */
+function directShot(t: number, y: number): number {
+  if (t < 2 || y < 4) return 0; // pad cam — countdown + ignition
+  if (y < 22) return 1; // tower cam — clearing the gantry
+  if (y < 80) return 2; // ground tracking telephoto
+  if (y < 150) return 3; // chase cam through the clouds
+  return 4; // orbit reveal
+}
+
+/** Multi-shot cinematic camera (§6a-ii): every shot looks at the rocket's
+ *  simulated position each frame; moves are damped, never snapped. */
+function LaunchDirector({
+  clockRef,
+  active,
+  shotOverride,
+  onShot,
+}: {
+  clockRef: React.MutableRefObject<{ t: number; altKm: number; y: number }>;
+  active: boolean;
+  shotOverride: number | null;
+  onShot: (label: string) => void;
+}) {
+  const camPos = useRef(new THREE.Vector3(9, 6, 11));
+  const camLook = useRef(new THREE.Vector3(0, 4, 0));
+  const activeShot = useRef(-1);
+  const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+  useFrame((state, dt) => {
+    if (!active) return;
+    const { t, y } = clockRef.current;
+    const rocketMid = new THREE.Vector3(0, y + 4, 0);
+    const shot = reducedMotion ? 2 : shotOverride ?? directShot(t, y);
+    if (shot !== activeShot.current) {
+      activeShot.current = shot;
+      onShot(SHOT_NAMES[shot]);
+    }
+
+    const cam = state.camera as THREE.PerspectiveCamera;
+    let targetPos: THREE.Vector3;
+    let targetFov = 40;
+    switch (shot) {
+      case 0: // pad cam — low wide shot
+        targetPos = new THREE.Vector3(15, 2, 18);
+        targetFov = 45;
+        break;
+      case 1: // tower cam — close pass at the gantry
+        targetPos = new THREE.Vector3(6, 11, 7);
+        targetFov = 42;
+        break;
+      case 2: // ground tracking telephoto — planted press-site shot
+        targetPos = new THREE.Vector3(42, 2.5, 48);
+        targetFov = Math.max(10, 34 - y * 0.18);
+        break;
+      case 3: // chase cam — alongside through the cloud layer
+        targetPos = new THREE.Vector3(8, y + 1, 10);
+        targetFov = 45;
+        break;
+      default: // orbit reveal — pull back as the sky turns black
+        targetPos = new THREE.Vector3(38, y + 14, 46);
+        targetFov = 50;
+    }
+
+    const k = 1 - Math.exp(-2.6 * dt);
+    camPos.current.lerp(targetPos, k);
+    camLook.current.lerp(rocketMid, Math.min(1, k * 2));
+    const igniteShake = t >= 0 && t < 2.5 ? 0.2 * (1 - t / 2.5) : 0;
+    cam.position.set(
+      camPos.current.x + (Math.random() - 0.5) * igniteShake,
+      camPos.current.y + (Math.random() - 0.5) * igniteShake,
+      camPos.current.z,
+    );
+    cam.lookAt(camLook.current);
+    cam.fov += (targetFov - cam.fov) * k;
+    cam.updateProjectionMatrix();
+  });
+  return null;
+}
+
 export default function LaunchPage() {
   const navigate = useNavigate();
   const profile = useRocketState((s) => s.profile);
@@ -89,8 +171,10 @@ export default function LaunchPage() {
   const [count, setCount] = useState(3);
   const [altReadout, setAltReadout] = useState(0);
   const [recording, setRecording] = useState(false);
+  const [shotOverride, setShotOverride] = useState<number | null>(null);
+  const [shotLabel, setShotLabel] = useState("📺 Auto director");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const clockRef = useRef({ t: 0, altKm: 0 });
+  const clockRef = useRef({ t: 0, altKm: 0, y: 0 });
   const recorderRef = useRef<MediaRecorder | null>(null);
   const savedRef = useRef(false);
 
@@ -184,6 +268,7 @@ export default function LaunchPage() {
           skyColor={skyColor}
           towerRetracted={phase !== "ready"}
           cameraDistance={16}
+          controlsEnabled={phase !== "flight"}
           onCanvasReady={(c) => (canvasRef.current = c)}
         >
           <FlyingRocket
@@ -193,6 +278,12 @@ export default function LaunchPage() {
             clockRef={clockRef}
             partLevels={profile?.partLevels}
           />
+          <LaunchDirector
+            clockRef={clockRef}
+            active={phase === "flight"}
+            shotOverride={shotOverride}
+            onShot={(l) => setShotLabel(shotOverride === null ? `${l} (auto)` : l)}
+          />
         </RocketScene>
       </div>
 
@@ -201,6 +292,24 @@ export default function LaunchPage() {
         🚀 Mission to {dest?.emoji} {dest?.name} — lifting off from {site.name}
       </div>
       <div className="absolute top-4 right-4 flex gap-2 z-10">
+        {phase === "flight" && (
+          <button
+            className="btn-ghost !px-3 !py-1 text-xs"
+            onClick={() =>
+              setShotOverride((cur) => {
+                const next = cur === null ? 0 : cur + 1;
+                if (next >= SHOT_NAMES.length) {
+                  setShotLabel("📺 Auto director");
+                  return null;
+                }
+                setShotLabel(SHOT_NAMES[next]);
+                return next;
+              })
+            }
+          >
+            {shotLabel} — switch
+          </button>
+        )}
         <button className={`btn-ghost !px-3 !py-1 text-xs ${recording ? "!border-red-400 !text-red-300" : ""}`} onClick={toggleRecording}>
           {recording ? "⏹ Stop film" : "🎬 Record launch film"}
         </button>

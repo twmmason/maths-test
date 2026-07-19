@@ -5,9 +5,10 @@ import * as THREE from "three";
 import { ACESFilmicToneMapping } from "three";
 import type { LaunchSite } from "../mission/launchSites";
 import { TERRAIN_COLORS } from "../mission/launchSites";
+import { GeoEnvironment, HAS_MAPS_KEY } from "./GeoEnvironment";
 
 /** Gantry + pad. Retracts the tower when `towerRetracted`. */
-export function Launchpad({ site, towerRetracted = false }: { site?: LaunchSite; towerRetracted?: boolean }) {
+export function Launchpad({ site, towerRetracted = false, ground = true }: { site?: LaunchSite; towerRetracted?: boolean; ground?: boolean }) {
   const towerRef = useRef<THREE.Group>(null);
   useFrame((_, dt) => {
     if (!towerRef.current) return;
@@ -17,11 +18,13 @@ export function Launchpad({ site, towerRetracted = false }: { site?: LaunchSite;
   const terrain = TERRAIN_COLORS[site?.terrain ?? "coastal"];
   return (
     <group>
-      {/* Ground */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.31, 0]} receiveShadow>
-        <circleGeometry args={[120, 48]} />
-        <meshStandardMaterial color={terrain.ground} roughness={1} />
-      </mesh>
+      {/* Ground (stylised fallback — hidden when real 3D Tiles terrain is live) */}
+      {ground && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.31, 0]} receiveShadow>
+          <circleGeometry args={[120, 48]} />
+          <meshStandardMaterial color={terrain.ground} roughness={1} />
+        </mesh>
+      )}
       {/* Concrete pad + blast deflector */}
       <mesh position={[0, -0.15, 0]} receiveShadow>
         <cylinderGeometry args={[6, 6.5, 0.3, 32]} />
@@ -44,8 +47,8 @@ export function Launchpad({ site, towerRetracted = false }: { site?: LaunchSite;
           </mesh>
         ))}
       </group>
-      {/* Distant hills */}
-      {[[-40, 18, -60], [50, 14, -70], [-65, 10, 20], [60, 16, 40]].map(([x, r, z], i) => (
+      {/* Distant hills (stylised fallback only) */}
+      {ground && [[-40, 18, -60], [50, 14, -70], [-65, 10, 20], [60, 16, 40]].map(([x, r, z], i) => (
         <mesh key={i} position={[x, -r * 0.55, z]}>
           <sphereGeometry args={[r, 16, 12]} />
           <meshStandardMaterial color={terrain.horizon} roughness={1} />
@@ -82,6 +85,12 @@ export interface RocketSceneProps {
   showPad?: boolean;
   cameraDistance?: number;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
+  /** Real takram sky/clouds + Google 3D Tiles terrain at the site (network-first). */
+  geo?: boolean;
+  /** 0–24 local solar hour for the geo sun (launch can shift it). */
+  solarHour?: number;
+  /** Disable OrbitControls + CameraRig — the launch director drives the camera. */
+  controlsEnabled?: boolean;
 }
 
 export default function RocketScene({
@@ -94,39 +103,56 @@ export default function RocketScene({
   showPad = true,
   cameraDistance = 13,
   onCanvasReady,
+  geo = true,
+  solarHour,
+  controlsEnabled = true,
 }: RocketSceneProps) {
   const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const geoActive = geo && HAS_MAPS_KEY && Boolean(site);
   return (
     <Canvas
       shadows
       dpr={[1, 2]}
       gl={{ antialias: true, toneMapping: ACESFilmicToneMapping, preserveDrawingBuffer: true }}
-      camera={{ position: [9, 6, 11], fov: 40 }}
+      camera={{ position: [9, 6, 11], fov: 40, near: 0.5, far: 80000 }}
       onCreated={({ gl }) => {
         gl.domElement.addEventListener("webglcontextlost", (e) => e.preventDefault());
         onCanvasReady?.(gl.domElement);
       }}
     >
-      <color attach="background" args={[skyColor]} />
-      <fog attach="fog" args={[skyColor, 60, 160]} />
-      <Stars radius={100} depth={60} count={3000} factor={4} saturation={0} fade speed={reducedMotion ? 0 : 0.6} />
-      <ambientLight intensity={0.45} />
-      <hemisphereLight intensity={0.35} color="#bfd8ff" groundColor="#33405e" />
-      <directionalLight position={[12, 18, 8]} intensity={2.2} castShadow shadow-mapSize={[1024, 1024]} />
-      <Suspense fallback={null}>
-        {showPad && <Launchpad site={site} towerRetracted={towerRetracted} />}
-        {children}
-      </Suspense>
-      <CameraRig focusY={focusY} distance={cameraDistance} />
-      <OrbitControls
-        enablePan={false}
-        maxPolarAngle={Math.PI / 2 - 0.04}
-        minDistance={5}
-        maxDistance={45}
-        autoRotate={autoRotate && !reducedMotion}
-        autoRotateSpeed={0.6}
-        target={[0, 4, 0]}
-      />
+      {geoActive && site ? (
+        <Suspense fallback={null}>
+          <GeoEnvironment site={site} solarHour={solarHour} clouds={!reducedMotion}>
+            {showPad && <Launchpad site={site} towerRetracted={towerRetracted} ground={false} />}
+            {children}
+          </GeoEnvironment>
+        </Suspense>
+      ) : (
+        <>
+          <color attach="background" args={[skyColor]} />
+          <fog attach="fog" args={[skyColor, 60, 160]} />
+          <Stars radius={100} depth={60} count={3000} factor={4} saturation={0} fade speed={reducedMotion ? 0 : 0.6} />
+          <ambientLight intensity={0.45} />
+          <hemisphereLight intensity={0.35} color="#bfd8ff" groundColor="#33405e" />
+          <directionalLight position={[12, 18, 8]} intensity={2.2} castShadow shadow-mapSize={[1024, 1024]} />
+          <Suspense fallback={null}>
+            {showPad && <Launchpad site={site} towerRetracted={towerRetracted} />}
+            {children}
+          </Suspense>
+        </>
+      )}
+      {controlsEnabled && <CameraRig focusY={focusY} distance={cameraDistance} />}
+      {controlsEnabled && (
+        <OrbitControls
+          enablePan={false}
+          maxPolarAngle={Math.PI / 2 - 0.04}
+          minDistance={5}
+          maxDistance={45}
+          autoRotate={autoRotate && !reducedMotion}
+          autoRotateSpeed={0.6}
+          target={[0, 4, 0]}
+        />
+      )}
     </Canvas>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo , type ReactElement } from "react";
 import * as THREE from "three";
 import type { RocketDesign } from "./rocketDesign";
 import type { RocketPart } from "../curriculum/types";
@@ -41,7 +41,7 @@ interface PartProps {
   level?: 1 | 2 | 3;
   interactive?: boolean;
   onSelect?: (part: RocketPart) => void;
-  children: (material: JSX.Element) => JSX.Element;
+  children: (material: ReactElement) => ReactElement;
 }
 
 function Part({ part, draft, selected, level = 1, interactive, onSelect, children }: PartProps) {
