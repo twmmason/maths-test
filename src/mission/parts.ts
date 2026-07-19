@@ -12,15 +12,16 @@ export function criteriaForPart(part: RocketPart, keyStage: KeyStage = "ks2"): s
   return CRITERIA.filter((c) => c.part === effective && c.keyStage === keyStage).map((c) => c.code);
 }
 
+/** SpaceX Falcon-9-inspired palette: clean white body, dark interstage, silver nose. */
 export const PART_MATERIALS: Record<RocketPart, { color: string; roughness: number; metalness: number; opacity?: number }> = {
-  noseCone: { color: "#d4daf0", roughness: 0.18, metalness: 0.65 },
-  hull: { color: "#8896cc", roughness: 0.28, metalness: 0.55 },
-  fuelTank: { color: "#22d3ee", roughness: 0.12, metalness: 0.15, opacity: 0.55 },
-  engine: { color: "#4a5580", roughness: 0.22, metalness: 0.78 },
-  fins: { color: "#e0518a", roughness: 0.3, metalness: 0.35 },
-  payloadBay: { color: "#9575d4", roughness: 0.25, metalness: 0.45 },
-  electronics: { color: "#2bb880", roughness: 0.2, metalness: 0.6 },
-  booster: { color: "#e5a818", roughness: 0.25, metalness: 0.55 },
+  noseCone: { color: "#e8edf5", roughness: 0.15, metalness: 0.55 },   // silver-white fairing
+  hull: { color: "#f0f2f5", roughness: 0.22, metalness: 0.35 },       // clean white body
+  fuelTank: { color: "#d0e8f0", roughness: 0.12, metalness: 0.2, opacity: 0.6 }, // pale translucent LOX tank
+  engine: { color: "#2a2e38", roughness: 0.28, metalness: 0.72 },     // dark engine section (Merlin cluster)
+  fins: { color: "#3a3f4a", roughness: 0.3, metalness: 0.5 },         // dark titanium grid fins
+  payloadBay: { color: "#c8cdd6", roughness: 0.2, metalness: 0.4 },   // light grey payload adapter
+  electronics: { color: "#1a2030", roughness: 0.25, metalness: 0.6 }, // black avionics band
+  booster: { color: "#e8eaed", roughness: 0.2, metalness: 0.4 },      // white side boosters
 };
 
 /** Cosmetic upgrade tint per level (Lv2 shinier, Lv3 shiniest). */

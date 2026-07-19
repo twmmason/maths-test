@@ -26,16 +26,16 @@ export function Launchpad({ site, towerRetracted = false, ground = true }: { sit
         </mesh>
       )}
       {/* Concrete pad + blast deflector */}
-      <mesh position={[0, -0.15, 0]} receiveShadow>
+      <mesh position={[0, -0.45, 0]} receiveShadow>
         <cylinderGeometry args={[6, 6.5, 0.3, 32]} />
         <meshStandardMaterial color="#7d8497" roughness={0.9} />
       </mesh>
-      <mesh position={[0, -0.05, 0]} receiveShadow>
+      <mesh position={[0, -0.32, 0]} receiveShadow>
         <cylinderGeometry args={[2.2, 2.5, 0.25, 24]} />
         <meshStandardMaterial color="#4a5066" roughness={0.8} metalness={0.2} />
       </mesh>
       {/* Service tower (retracts at launch) */}
-      <group ref={towerRef} position={[3.4, 0, 0]}>
+      <group ref={towerRef} position={[3.4, -0.3, 0]}>
         <mesh position={[0, 4.5, 0]} castShadow>
           <boxGeometry args={[0.7, 9, 0.7]} />
           <meshStandardMaterial color="#a33b3b" roughness={0.6} metalness={0.4} />
