@@ -699,7 +699,7 @@ const pool = ((import.meta.env.VITE_GEMINI_API_KEY_POOL as string | undefined) ?
 const keys = [primary, ...pool].filter(Boolean) as string[];
 
 let keyIndex = 0;
-export const MODEL = "gemini-3-flash-preview";
+export const MODEL = "gemini-3.5-flash";
 
 export function getClient(): GoogleGenAI | null {
   return keys.length ? new GoogleGenAI({ apiKey: keys[keyIndex] }) : null;
