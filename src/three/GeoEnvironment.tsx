@@ -29,6 +29,7 @@ import {
 import { Ellipsoid, Geodetic, radians } from "@takram/three-geospatial";
 import { Clouds, CloudLayer } from "@takram/three-clouds/r3f";
 import { LensFlare, Dithering } from "@takram/three-geospatial-effects/r3f";
+import { Environment } from "@react-three/drei";
 import { EffectComposer, Bloom, SMAA, ToneMapping, Vignette } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
 import { TilesRenderer, TilesPlugin } from "3d-tiles-renderer/r3f";
@@ -265,6 +266,8 @@ export function GeoEnvironment({
       />
       <SiteTiles site={site} />
       {children}
+      {/* Env probe so the rocket meshPhysicalMaterial has reflections */}
+      <Environment preset="sunset" background={false} environmentIntensity={0.5} />
       <EffectComposer multisampling={0} enableNormalPass>
         {clouds ? (
           <Clouds qualityPreset="low" coverage={0.32} localWeatherVelocity={[0.00005, 0]}>

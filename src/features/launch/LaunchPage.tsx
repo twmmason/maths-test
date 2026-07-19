@@ -229,10 +229,12 @@ export default function LaunchPage() {
     if (phase !== "countdown") return;
     if (count <= 0) {
       sfx.launch();
+    // Cheers shortly after liftoff
+    setTimeout(() => sfx.cheers(), 4000);
       setPhase("flight");
       return;
     }
-    sfx.countdown();
+    sfx.countdown(count);
     const id = setTimeout(() => setCount((c) => c - 1), 1000);
     return () => clearTimeout(id);
   }, [phase, count]);
@@ -358,7 +360,7 @@ export default function LaunchPage() {
 
       {phase === "flight" && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 hud-panel px-6 py-2 z-10 text-center">
-          <div className="text-2xl font-black text-cyan-200 neon tabular-nums">{altReadout.toFixed(1)} km</div>
+          <div className="text-2xl font-black text-cyan-200 neon tabular-nums">{altReadout < 1 ? `${Math.round(altReadout * 1000)} m` : `${altReadout.toFixed(1)} km`}</div>
           <div className="text-[10px] text-slate-400 uppercase tracking-widest">altitude</div>
         </div>
       )}

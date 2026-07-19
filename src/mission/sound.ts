@@ -62,7 +62,17 @@ export const sfx = {
     setTimeout(() => beep(784, 0.14), 90);
   },
   nudge: () => beep(330, 0.12, "sine"),
-  countdown: () => beep(880, 0.15, "square", 0.08),
+  /** Vocal countdown: speaks the number + beep tone. */
+  countdown: (n?: number) => {
+    beep(880, 0.15, "square", 0.08);
+    if (typeof window !== "undefined" && "speechSynthesis" in window && n !== undefined) {
+      const u = new SpeechSynthesisUtterance(n === 0 ? "Liftoff!" : String(n));
+      u.rate = 1.2;
+      u.pitch = 0.9;
+      u.volume = 0.7;
+      window.speechSynthesis.speak(u);
+    }
+  },
   /** Rocket launch: ALL-NOISE design — no oscillators/tones. Real rocket sound
    *  is broadband noise at different frequency bands with shaped envelopes.
    *  Layers: sub-bass rumble, low roar, mid crackle, high sizzle. */
@@ -109,6 +119,22 @@ export const sfx = {
 
     // High sizzle (2000-6000Hz) — the airy top shimmer
     noiseBand(2000, 6000, 10, 0.012, 2.5, 4);
+  },
+  /** Crowd cheers at mission success — uses speech synthesis for accessibility. */
+  cheers: () => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      const phrases = ["Yeah!", "Go, go, go!", "Nominal!", "We have liftoff!", "Beautiful!"];
+      const u = new SpeechSynthesisUtterance(phrases[Math.floor(Math.random() * phrases.length)]);
+      u.rate = 1.1;
+      u.pitch = 1.2;
+      u.volume = 0.6;
+      window.speechSynthesis.speak(u);
+    }
+    // Celebratory tones
+    beep(523, 0.15, "sine", 0.04);
+    setTimeout(() => beep(659, 0.15, "sine", 0.04), 120);
+    setTimeout(() => beep(784, 0.2, "sine", 0.05), 240);
+    setTimeout(() => beep(1047, 0.3, "sine", 0.04), 400);
   },
   /** Ambient pad wind (call stopWind to end). */
   startWind: () => {
