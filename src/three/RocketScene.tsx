@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Stars } from "@react-three/drei";
+import { Environment, OrbitControls, Stars } from "@react-three/drei";
 import { Suspense, useRef, type ReactNode } from "react";
 import * as THREE from "three";
 import { ACESFilmicToneMapping } from "three";
@@ -148,8 +148,6 @@ export interface RocketSceneProps {
   solarHour?: number;
   /** Disable OrbitControls + CameraRig — the launch director drives the camera. */
   controlsEnabled?: boolean;
-  /** Volumetric exhaust smoke at pad level (launch mode). */
-  exhaustSmoke?: boolean;
 }
 
 export default function RocketScene({
@@ -165,7 +163,6 @@ export default function RocketScene({
   geo = true,
   solarHour,
   controlsEnabled = true,
-  exhaustSmoke = false,
 }: RocketSceneProps) {
   const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const geoActive = geo && HAS_MAPS_KEY && Boolean(site);
@@ -182,7 +179,7 @@ export default function RocketScene({
     >
       {geoActive && site ? (
         <Suspense fallback={null}>
-          <GeoEnvironment site={site} solarHour={solarHour} clouds={!reducedMotion} exhaustSmoke={exhaustSmoke}>
+          <GeoEnvironment site={site} solarHour={solarHour} clouds={!reducedMotion}>
             {showPad && <Launchpad site={site} towerRetracted={towerRetracted} ground={false} />}
             {children}
           </GeoEnvironment>

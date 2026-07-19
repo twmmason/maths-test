@@ -78,6 +78,19 @@ function FlyingRocket({
   });
 
 
+  // Pad smoke: billowing exhaust cloud at ground level (animated mesh approach)
+  const [smokeParticles] = useState(() => 
+    Array.from({ length: 16 }, (_, i) => ({
+      id: i,
+      angle: (i / 16) * Math.PI * 2 + Math.random() * 0.5,
+      delay: i * 0.15 + Math.random() * 0.1,
+      speed: 1.2 + Math.random() * 0.8,
+      riseSpeed: 0.15 + Math.random() * 0.2,
+      maxR: 3 + Math.random() * 2,
+      yOff: Math.random() * 0.4,
+    }))
+  );
+
   return (
     <>
       <group ref={group}>
@@ -296,7 +309,6 @@ export default function LaunchPage() {
           towerRetracted={phase !== "ready"}
           cameraDistance={16}
           controlsEnabled={phase !== "flight"}
-          exhaustSmoke={phase === "flight" || phase === "countdown"}
           onCanvasReady={(c) => (canvasRef.current = c)}
         >
           <FlyingRocket

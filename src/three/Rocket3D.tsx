@@ -1,6 +1,5 @@
-import { useState, useMemo , type ReactElement } from "react";
+import { useState, useMemo, type ReactElement } from "react";
 import * as THREE from "three";
-import { Environment } from "@react-three/drei";
 import type { RocketDesign } from "./rocketDesign";
 import type { RocketPart } from "../curriculum/types";
 import { PART_MATERIALS, levelMaterial } from "../mission/parts";
@@ -49,13 +48,18 @@ function Part({ part, draft, selected, level = 1, interactive, onSelect, childre
   const [hovered, setHovered] = useState(false);
   const base = PART_MATERIALS[part];
   const mat = levelMaterial(base, level);
+  const isTransparent = draft || base.opacity !== undefined;
   const material = (
-    <meshStandardMaterial
+    <meshPhysicalMaterial
       color={mat.color}
       roughness={mat.roughness}
       metalness={mat.metalness}
-      envMapIntensity={1.2}
-      transparent={draft || base.opacity !== undefined}
+      envMapIntensity={1.6}
+      clearcoat={isTransparent ? 0 : 0.8}
+      clearcoatRoughness={0.12}
+      reflectivity={0.9}
+      ior={1.5}
+      transparent={isTransparent}
       opacity={draft ? 0.28 : base.opacity ?? 1}
       emissive={selected ? "#22d3ee" : hovered && interactive ? "#22d3ee" : draft ? "#fbbf24" : level >= 3 ? "#22d3ee" : "#000000"}
       emissiveIntensity={selected ? 0.45 : hovered && interactive ? 0.3 : draft ? 0.25 : level >= 3 ? 0.12 : 0}

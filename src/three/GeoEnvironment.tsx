@@ -248,8 +248,6 @@ export interface GeoEnvironmentProps {
   solarHour?: number;
   /** Volumetric cloud layer on/off (reduced-motion turns it off). */
   clouds?: boolean;
-  /** Add a thick ground-level exhaust smoke cloud at the pad (launch mode). */
-  exhaustSmoke?: boolean;
   children?: ReactNode;
 }
 
@@ -262,7 +260,6 @@ export function GeoEnvironment({
   site,
   solarHour = 16.5,
   clouds = true,
-  exhaustSmoke = false,
   children,
 }: GeoEnvironmentProps) {
   const atmosphereRef = useRef<AtmosphereApi>(null);
@@ -304,10 +301,7 @@ export function GeoEnvironment({
         {clouds ? (
           <Clouds qualityPreset="low" coverage={0.32} localWeatherVelocity={[0.00005, 0]}>
             <CloudLayer altitude={1400} height={550} />
-            {exhaustSmoke && (
-              <CloudLayer altitude={5} height={30} densityScale={4}
-                shapeAmount={0.3} weatherExponent={0.5} shadow={false} />
-            )}
+
           </Clouds>
         ) : (
           <></>
