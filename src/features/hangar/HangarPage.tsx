@@ -46,6 +46,18 @@ export default function HangarPage() {
             setPhotoOverlay(null);
           }
         }}
+        onWheel={() => {
+          if (photoOverlay && photoMode) {
+            setPhotoOverlay(null);
+            // Re-render after zoom settles
+            if (lastPhotoMode.current && !photoBusy) {
+              setTimeout(() => {
+                setPhotoBusy(true);
+                setTimeout(() => viewSwitcherRef.current?.recapture(), 400);
+              }, 600);
+            }
+          }
+        }}
         onPointerUp={() => {
           if (!photoOverlay && photoMode && lastPhotoMode.current && !photoBusy) {
             // User finished dragging — re-capture from the new angle after a brief settle
