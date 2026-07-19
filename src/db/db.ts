@@ -15,6 +15,8 @@ export interface Profile {
   patches: string[];
   /** "I'm in Year 7+" — opens the Astronaut Academy without grinding KS2. */
   academyUnlocked?: boolean;
+  /** Wrench Time spare-part tokens (re-doing an install step costs one). */
+  spareParts?: number;
 }
 
 export interface Attempt {
@@ -39,6 +41,8 @@ export interface MissionRecord {
   reachedDestination: boolean;
   screenshot?: string; // dataURL of the launched rocket
   photos?: string[]; // AI mission photos / posters
+  /** Wrench Time flight outcome: nominal | degraded | lostVehicle | padAbort. */
+  outcome?: string;
   createdAt: number;
 }
 

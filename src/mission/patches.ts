@@ -24,6 +24,9 @@ export const PATCHES: MissionPatch[] = [
   { id: "strand-f", name: "Fraction Fueller", emoji: "⛽", description: "Master an entire strand: Fractions" },
   { id: "strand-g", name: "Geometry Guru", emoji: "📐", description: "Master an entire strand: Geometry" },
   { id: "ten-missions", name: "Veteran Commander", emoji: "🎖️", description: "Complete 10 missions" },
+  // ── Wrench Time patches ──
+  { id: "failure-fix", name: "Failure Is Not An Option", emoji: "🧯", description: "Lose a vehicle, investigate the crash, fix the maths and fly a nominal mission" },
+  { id: "green-board", name: "Green Board", emoji: "🟢", description: "Fly 3 nominal launches in a row — unlocks cosmetic liveries" },
   // ── Astronaut Academy patches (KS3) ──
   { id: "academy-first", name: "Academy Cadet", emoji: "🎓", description: "Fly your first Astronaut Academy mission" },
   { id: "jupiter-moons", name: "Moons of Jupiter", emoji: "🪐", description: "Fly a mission to Jupiter's Moons" },
@@ -47,7 +50,7 @@ export function evaluatePatches(
   profile: Profile,
   missions: MissionRecord[],
   attempts: Attempt[],
-  latest?: { destinationId: string; perfect: boolean },
+  latest?: { destinationId: string; perfect: boolean; outcome?: string },
 ): string[] {
   const earned = new Set(profile.patches);
   const fresh: string[] = [];
@@ -73,6 +76,17 @@ export function evaluatePatches(
   if (latest?.perfect) award("perfect-mission");
   if (profile.launchStreak >= 3) award("streak-3");
   if (profile.launchStreak >= 5) award("streak-5");
+
+  // ── Wrench Time: crash-investigation learning loop ──
+  // "Failure Is Not An Option": a nominal flight AFTER a lost vehicle / abort.
+  const hadFailure = missions.some((m) => m.outcome === "lostVehicle" || m.outcome === "padAbort");
+  if (latest?.outcome === "nominal" && hadFailure) award("failure-fix");
+  // "Green Board": 3 consecutive nominal launches (including this one).
+  if (latest?.outcome === "nominal") {
+    // `missions` already includes the just-recorded flight.
+    const recent = [...missions].sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
+    if (recent.length === 3 && recent.every((m) => m.outcome === "nominal")) award("green-board");
+  }
 
   const mastery = computeMastery(attempts);
   const counts = strandMasteryCounts(mastery);

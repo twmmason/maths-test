@@ -10,6 +10,8 @@ import { CRITERIA_BY_CODE } from "../../curriculum/criteria";
 import { STAGE_BY_PART } from "../../mission/stages";
 import { PATCH_BY_ID } from "../../mission/patches";
 import { narrateDebrief } from "../../ai/debrief";
+import { deriveFailurePlan, type PlannedFailure } from "../../physics/failureModes";
+import { gradeForError } from "../../three/rocketDesign";
 import { db } from "../../db/db";
 import type { RocketPart } from "../../curriculum/types";
 
@@ -57,9 +59,41 @@ export default function ReportPage() {
   const dest = DESTINATION_BY_ID[destinationId];
   const reached = !!flight && flight.maxAltitudeKm >= (dest?.requiredAltitudeKm ?? 150);
 
+  const selectPart = useRocketState((s) => s.selectPart);
+  const setInstallingPart = useRocketState((s) => s.setInstallingPart);
+
   useEffect(() => {
     if (!flight) navigate("/");
   }, [flight, navigate]);
+
+  // Crash investigation: re-derive the deterministic failure plan and keep
+  // the entries that actually fired during THIS flight (matched by stepId).
+  const anomalies = useMemo<PlannedFailure[]>(() => {
+    if (!flight || flight.failures.length === 0) return [];
+    const plan = deriveFailurePlan(design);
+    const firedSteps = new Set(flight.failures.map((f) => f.stepId).filter(Boolean));
+    const matched = plan.filter((p) => firedSteps.has(p.stepId));
+    return matched.length > 0 ? matched : plan.filter((p) => p.severity === "failure" || p.severity === "catastrophic");
+  }, [flight, design]);
+
+  // Quality grades per install step — revealed only AFTER launch, here.
+  const installGrades = useMemo(() => {
+    const rows: { part: RocketPart; stepId: string; grade: "A" | "B" | "C" | "D"; skipped: boolean; actual: number; target: number; criterionCode: string }[] = [];
+    for (const [part, inst] of Object.entries(design.installedParts)) {
+      for (const s of inst?.install?.steps ?? []) {
+        rows.push({
+          part: part as RocketPart,
+          stepId: s.stepId,
+          grade: gradeForError(s.errorPct),
+          skipped: !!s.skipped,
+          actual: s.actual,
+          target: s.target,
+          criterionCode: s.criterionCode,
+        });
+      }
+    }
+    return rows;
+  }, [design]);
 
   useEffect(() => {
     if (!flight) return;
@@ -74,6 +108,14 @@ export default function ReportPage() {
       events: flight.events.map((e) => e.label),
       struggledOffPad: flight.struggledOffPad,
       tumbled: flight.tumbled,
+      outcome: flight.outcome,
+      anomalies: anomalies.map((a) => ({
+        part: STAGE_BY_PART[a.partAtFault]?.label ?? a.partAtFault,
+        step: a.stepId,
+        playerValue: a.playerValue,
+        targetValue: a.targetValue,
+        explanation: a.explanation,
+      })),
     }).then((text) => live && setDebrief(text));
     return () => {
       live = false;
@@ -125,7 +167,9 @@ export default function ReportPage() {
         {/* Right: report */}
         <div className="space-y-3">
           <div className="hud-panel p-4">
-            <h1 className="text-xl font-black text-cyan-200 neon mb-1">📋 After-action report</h1>
+            <h1 className="text-xl font-black text-cyan-200 neon mb-1">
+              {flight.outcome === "lostVehicle" || flight.outcome === "padAbort" ? "🕵️ Crash investigation" : "📋 After-action report"}
+            </h1>
             <div className="text-sm text-slate-300">
               {dest?.emoji} {dest?.name} from {site?.name} — peak{" "}
               <span className="text-cyan-300 font-bold">{Math.round(flight.maxAltitudeKm).toLocaleString("en-GB")} km</span> —{" "}
@@ -142,6 +186,80 @@ export default function ReportPage() {
               {debrief ?? <span className="text-slate-500">Mission Control is preparing the debrief…</span>}
             </p>
           </div>
+
+          {/* ── Anomaly board: which bolt, which maths ── */}
+          {anomalies.length > 0 && (
+            <div className="hud-panel p-4 border-red-400/40">
+              <div className="text-xs text-red-300 uppercase tracking-widest mb-2">🚨 Anomaly board — what went wrong, and which maths fixes it</div>
+              <div className="space-y-3">
+                {anomalies.map((a) => {
+                  const stage = STAGE_BY_PART[a.partAtFault];
+                  const step = design.installedParts[a.partAtFault]?.install?.steps.find((s) => s.stepId === a.stepId);
+                  return (
+                    <div key={a.stepId + a.mode} className="rounded-lg border border-red-500/30 bg-red-950/20 p-3 space-y-1.5">
+                      <div className="text-sm font-bold text-red-200">
+                        {stage?.emoji} {stage?.label} — <span className="font-mono text-xs">{a.stepId}</span>
+                        {step?.skipped && <span className="ml-2 text-[10px] text-amber-300">⚠️ inspection was skipped</span>}
+                      </div>
+                      {a.playerValue !== undefined && a.targetValue !== undefined && (
+                        <div className="text-xs text-slate-300">
+                          Your setting: <b className="text-red-300">{a.playerValue}</b> · engineering spec: <b className="text-emerald-300">{a.targetValue}</b>
+                          {step && <span className="ml-2 text-slate-500">({CRITERIA_BY_CODE[step.criterionCode]?.description ?? step.criterionCode})</span>}
+                        </div>
+                      )}
+                      <div className="text-xs text-slate-400 italic">{a.explanation}</div>
+                      <button
+                        className="btn-amber !px-3 !py-1 text-xs"
+                        onClick={() => {
+                          selectPart(a.partAtFault);
+                          setInstallingPart(a.partAtFault);
+                          navigate("/vab");
+                        }}
+                      >
+                        🔧 Return to VAB — fix it
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Quality grades per install step (revealed only after flight) ── */}
+          {installGrades.length > 0 && (
+            <div className="hud-panel p-4">
+              <div className="text-xs text-slate-400 uppercase tracking-widest mb-2">🔍 Installation quality — graded by the inspectors</div>
+              <div className="grid grid-cols-1 gap-1">
+                {installGrades.map((g) => (
+                  <div key={g.stepId} className="flex items-center gap-2 text-xs">
+                    <span
+                      className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center font-black border ${
+                        g.skipped
+                          ? "border-slate-600 text-slate-500"
+                          : g.grade === "A"
+                            ? "border-emerald-400 text-emerald-300"
+                            : g.grade === "B"
+                              ? "border-cyan-400 text-cyan-300"
+                              : g.grade === "C"
+                                ? "border-amber-400 text-amber-300"
+                                : "border-red-400 text-red-300"
+                      }`}
+                    >
+                      {g.skipped ? "–" : g.grade}
+                    </span>
+                    <span className="text-slate-300">
+                      {STAGE_BY_PART[g.part]?.emoji} <span className="font-mono">{g.stepId}</span>
+                      {g.skipped ? (
+                        <span className="text-amber-300 ml-1">inspection skipped — not checked before flight</span>
+                      ) : (
+                        <span className="text-slate-500 ml-1">set {g.actual} · spec {g.target}</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="hud-panel p-4">
             <div className="text-xs text-slate-400 uppercase tracking-widest mb-2">📈 Flight replay — altitude vs time</div>

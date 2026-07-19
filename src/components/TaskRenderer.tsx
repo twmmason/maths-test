@@ -27,7 +27,7 @@ import SampleSpaceWidget from "./widgets/SampleSpaceWidget";
 import ChartWidget from "./widgets/ChartWidget";
 import ScaleMapWidget from "./widgets/ScaleMapWidget";
 
-const WIDGETS = {
+export const WIDGETS = {
   protractor: ProtractorWidget,
   ruler: RulerWidget,
   fuelGauge: FuelGaugeWidget,

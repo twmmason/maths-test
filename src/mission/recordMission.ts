@@ -38,10 +38,13 @@ export async function recordMission(
     lastLaunchDay: today,
     lastPlayedAt: createdAt,
     partLevels: allPartLevels(mastery),
+    // Spare-parts economy: every mission grants 3 tokens (Wrench Time re-dos).
+    spareParts: (profile.spareParts ?? 10) + 3,
   };
   const newPatches = evaluatePatches(updated, missions, attempts, {
     destinationId: record.destinationId,
     perfect,
+    outcome: record.outcome,
   });
   updated.patches = [...updated.patches, ...newPatches];
   await db.profiles.put(updated);

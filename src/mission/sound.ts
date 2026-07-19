@@ -136,6 +136,75 @@ export const sfx = {
     setTimeout(() => beep(784, 0.2, "sine", 0.05), 240);
     setTimeout(() => beep(1047, 0.3, "sine", 0.04), 400);
   },
+  /** Cartoon-boom explosion: bass thump + noise burst. Jolly, not scary. */
+  explosion: () => {
+    const c = ensureCtx();
+    if (!c || !enabled) return;
+    const now = c.currentTime;
+    // White-noise blast
+    const len = c.sampleRate * 2.5;
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const lp = c.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.setValueAtTime(4000, now);
+    lp.frequency.exponentialRampToValueAtTime(120, now + 2.2);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.22, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 2.4);
+    src.connect(lp).connect(g).connect(c.destination);
+    src.start(now);
+    src.stop(now + 2.5);
+    // Sub thump
+    const osc = c.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(80, now);
+    osc.frequency.exponentialRampToValueAtTime(28, now + 0.8);
+    const og = c.createGain();
+    og.gain.setValueAtTime(0.18, now);
+    og.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+    osc.connect(og).connect(c.destination);
+    osc.start(now);
+    osc.stop(now + 1);
+  },
+  /** Pad-abort klaxon: alternating two-tone alarm. */
+  klaxon: () => {
+    const c = ensureCtx();
+    if (!c || !enabled) return;
+    for (let i = 0; i < 4; i++) {
+      setTimeout(() => beep(i % 2 === 0 ? 620 : 440, 0.28, "square", 0.07), i * 320);
+    }
+  },
+  /** Structural groan: slow low sawtooth wobble. */
+  groan: () => {
+    const c = ensureCtx();
+    if (!c || !enabled) return;
+    const now = c.currentTime;
+    const osc = c.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(70, now);
+    osc.frequency.linearRampToValueAtTime(45, now + 1.4);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.05, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+    osc.connect(g).connect(c.destination);
+    osc.start(now);
+    osc.stop(now + 1.5);
+  },
+  /** Range Safety Officer callout via speech synthesis (jolly, no injuries). */
+  rso: (line: string) => {
+    if (!enabled) return;
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      const u = new SpeechSynthesisUtterance(line);
+      u.rate = 1.05;
+      u.pitch = 0.85;
+      u.volume = 0.7;
+      window.speechSynthesis.speak(u);
+    }
+  },
   /** Ambient pad wind (call stopWind to end). */
   startWind: () => {
     if (windStop) windStop();

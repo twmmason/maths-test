@@ -1,3 +1,5 @@
+import type { RocketPart } from "../curriculum/types";
+
 export interface RocketPerformance {
   totalMass: number; // kg
   dryMass: number; // kg
@@ -16,12 +18,22 @@ export interface FlightSample {
   t: number; // seconds
   altitude: number; // km
   velocity: number; // m/s
+  /** Lateral drift in km (gimbal offset / CG offset veer). */
+  driftX?: number;
 }
+
+export type EventSeverity = "info" | "warning" | "failure" | "catastrophic";
 
 export interface FlightEvent {
   t: number;
   label: string;
+  severity?: EventSeverity;
+  partAtFault?: RocketPart;
+  /** Install step that caused this event, e.g. "fins.cantAngle". */
+  stepId?: string;
 }
+
+export type FlightOutcome = "nominal" | "degraded" | "lostVehicle" | "padAbort";
 
 export interface FlightResult {
   samples: FlightSample[];
@@ -31,4 +43,7 @@ export interface FlightResult {
   apogeeT: number;
   struggledOffPad: boolean;
   tumbled: boolean;
+  outcome: FlightOutcome;
+  /** Events with severity failure/catastrophic — the crash investigation feed. */
+  failures: FlightEvent[];
 }

@@ -13,6 +13,9 @@ export interface DebriefStats {
   events: string[];
   struggledOffPad: boolean;
   tumbled: boolean;
+  /** Wrench Time: flight outcome + crash-investigation findings (deterministic sim facts). */
+  outcome?: string;
+  anomalies?: { part: string; step: string; playerValue?: number; targetValue?: number; explanation: string }[];
 }
 
 /** After-action Flight Director narration (3-4 sentences, personal, specific). */
@@ -26,8 +29,16 @@ export async function narrateDebrief(stats: DebriefStats): Promise<string> {
 - Flight notes: ${stats.events.slice(0, 4).join("; ")}
 ${stats.struggledOffPad ? "- The rocket climbed slowly off the pad (low thrust-to-weight)." : ""}
 ${stats.tumbled ? "- The rocket tumbled from too few fins." : ""}
+${stats.outcome && stats.outcome !== "nominal" ? `- Flight outcome: ${stats.outcome}. Narrate this part like a friendly NTSB crash investigator: state the finding, the cause, the fix.` : ""}
+${(stats.anomalies ?? [])
+  .slice(0, 3)
+  .map(
+    (a) =>
+      `- Investigation finding: ${a.part} / ${a.step}${a.playerValue !== undefined && a.targetValue !== undefined ? ` — set to ${a.playerValue} vs spec ${a.targetValue}` : ""}. ${a.explanation}`,
+  )
+  .join("\n")}
 
-3-4 sentences max. Reference at least one specific thing from the flight notes. Warm and encouraging, and end looking forward to the next mission.`;
+3-4 sentences max. Reference at least one specific thing from the flight notes. Warm and encouraging (failures are jolly learning moments — nobody is hurt, the escape tower always works), and end looking forward to the next mission.`;
 
   const out = await generateText(prompt, flightDirectorSystem(), 6000);
   if (out && validateOutput(out, undefined, 800)) return out.trim();

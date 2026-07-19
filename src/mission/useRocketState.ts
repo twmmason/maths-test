@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { RocketPart } from "../curriculum/types";
-import { emptyDesign, type RocketDesign } from "../three/rocketDesign";
+import { emptyDesign, upgradeDesign, integrityFromSteps, type RocketDesign, type InstallStepResult } from "../three/rocketDesign";
 import { db, attemptsFor, type Profile, type Attempt } from "../db/db";
 import { loadActiveProfile, getActiveProfileId, clearActiveProfileId } from "../db/seed";
 import { xpForAttempt, computeMastery, masteryPercent, isAcademyUnlocked, allPartLevels } from "../engine/mastery";
@@ -14,6 +14,8 @@ export interface RocketState {
   design: RocketDesign;
   destinationId: string;
   selectedPart: RocketPart | null;
+  /** Part currently in its Wrench Time installation sequence (modal open). */
+  installingPart: RocketPart | null;
   /** Planned criteria per attached part. */
   partPlans: Partial<Record<RocketPart, PartPlan>>;
   /** Completed criterion codes per part. */
@@ -33,6 +35,12 @@ export interface RocketState {
   setDestination: (id: string) => void;
   setLaunchSite: (id: string) => Promise<void>;
   selectPart: (part: RocketPart | null) => void;
+  setInstallingPart: (part: RocketPart | null) => void;
+  /** Commit a Wrench Time install-step: write the player's numbers into the
+   * design (never gated on correctness) and log the step on the part. */
+  commitInstallStep: (part: RocketPart, result: InstallStepResult, patch: Partial<RocketDesign>) => Promise<void>;
+  /** Spend / refund spare-part tokens (persisted on the profile). */
+  adjustSpareParts: (delta: number) => Promise<void>;
   attachPart: (variantId: string, radialCount?: 2 | 3 | 4) => Promise<void>;
   detachPart: (part: RocketPart) => Promise<void>;
   updateDesign: (patch: Partial<RocketDesign>) => void;
@@ -76,6 +84,7 @@ export const useRocketState = create<RocketState>((set, get) => ({
   design: emptyDesign(),
   destinationId: "lowOrbit",
   selectedPart: null,
+  installingPart: null,
   partPlans: {},
   completedTasks: {},
   tasksCorrect: 0,
@@ -96,7 +105,7 @@ export const useRocketState = create<RocketState>((set, get) => ({
     }
     const attempts = await attemptsFor(profile.id);
     const saved = await db.savedMissions.get(profile.id);
-    const design = saved?.design ?? profile.rocketDesign ?? emptyDesign();
+    const design = upgradeDesign(saved?.design ?? profile.rocketDesign ?? emptyDesign());
     const partPlans: Partial<Record<RocketPart, PartPlan>> = {};
     for (const part of Object.keys(design.installedParts) as RocketPart[]) {
       partPlans[part] = planPart(part, saved?.destinationId ?? "lowOrbit", attempts, 2, Date.now(), isAcademyUnlocked(computeMastery(attempts), profile.academyUnlocked));
@@ -124,12 +133,44 @@ export const useRocketState = create<RocketState>((set, get) => ({
   setLaunchSite: async (id) => {
     const profile = get().profile;
     if (!profile) return;
-    const updated = { ...profile, launchSiteId: id };
+    const updated = { ...profile, launchSiteId: id, rocketDesign: get().design };
     await db.profiles.put(updated);
     set({ profile: updated });
   },
 
   selectPart: (part) => set({ selectedPart: part }),
+
+  setInstallingPart: (part) => set({ installingPart: part }),
+
+  commitInstallStep: async (part, result, patch) => {
+    const state = get();
+    const installed = state.design.installedParts[part];
+    if (!installed) return;
+    const prev = installed.install?.steps ?? [];
+    const steps = [...prev.filter((s) => s.stepId !== result.stepId), result];
+    const design: RocketDesign = {
+      ...state.design,
+      ...patch,
+      installedParts: {
+        ...state.design.installedParts,
+        [part]: { ...installed, install: { steps, integrity: integrityFromSteps(steps) } },
+      },
+    };
+    set({ design });
+    await persistDesign(design);
+    await persistMission({ ...get(), design });
+  },
+
+  adjustSpareParts: async (delta) => {
+    const profile = get().profile;
+    if (!profile) return;
+    const spareParts = Math.max(0, (profile.spareParts ?? 10) + delta);
+    // Always carry the CURRENT design when persisting the profile — the copy
+    // held in `profile` is from init time and would clobber install data.
+    const updated = { ...profile, spareParts, rocketDesign: get().design };
+    await db.profiles.put(updated);
+    set({ profile: updated });
+  },
 
   attachPart: async (variantId, radialCount) => {
     const variant: PartVariant | undefined = VARIANT_BY_ID[variantId];
@@ -153,7 +194,7 @@ export const useRocketState = create<RocketState>((set, get) => ({
     if (radialCount && variant.part === "booster") design.boosterCount = radialCount;
     const partPlans = { ...state.partPlans, [variant.part]: planPart(variant.part, state.destinationId, attempts, 2, Date.now(), state.academyOpen) };
     const completedTasks = { ...state.completedTasks, [variant.part]: [] };
-    set({ design, partPlans, completedTasks, selectedPart: variant.part });
+    set({ design, partPlans, completedTasks, selectedPart: variant.part, installingPart: variant.part });
     await persistDesign(design);
     await persistMission({ ...get(), design });
   },
@@ -168,7 +209,13 @@ export const useRocketState = create<RocketState>((set, get) => ({
     delete partPlans[part];
     const completedTasks = { ...state.completedTasks };
     delete completedTasks[part];
-    set({ design, partPlans, completedTasks, selectedPart: state.selectedPart === part ? null : state.selectedPart });
+    set({
+      design,
+      partPlans,
+      completedTasks,
+      selectedPart: state.selectedPart === part ? null : state.selectedPart,
+      installingPart: state.installingPart === part ? null : state.installingPart,
+    });
     await persistDesign(design);
     await persistMission({ ...get(), design });
   },
@@ -199,7 +246,7 @@ export const useRocketState = create<RocketState>((set, get) => ({
     const profile = get().profile;
     if (profile) {
       const xp = profile.xp + xpForAttempt(tier, correct, hintsUsed);
-      const updated = { ...profile, xp, lastPlayedAt: Date.now() };
+      const updated = { ...profile, xp, lastPlayedAt: Date.now(), rocketDesign: get().design };
       await db.profiles.put(updated);
       set({ profile: updated });
     }
@@ -209,7 +256,7 @@ export const useRocketState = create<RocketState>((set, get) => ({
       if (p) {
         const atts = await attemptsFor(p.id);
         const levels = allPartLevels(computeMastery(atts));
-        const updated = { ...p, partLevels: levels };
+        const updated = { ...p, partLevels: levels, rocketDesign: get().design };
         await db.profiles.put(updated);
         set({ profile: updated });
       }

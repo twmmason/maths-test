@@ -4,6 +4,7 @@ import RocketScene from "../../three/RocketScene";
 import Rocket3D, { focusHeightFor } from "../../three/Rocket3D";
 import PartsTray from "./PartsTray";
 import StagePanel from "./StagePanel";
+import InstallSequence from "./InstallSequence";
 import PerformancePanel from "../../components/PerformancePanel";
 import TaskRenderer from "../../components/TaskRenderer";
 import { useRocketState } from "../../mission/useRocketState";
@@ -23,6 +24,8 @@ export default function VABPage() {
   const destinationId = useRocketState((s) => s.destinationId);
   const selectedPart = useRocketState((s) => s.selectedPart);
   const selectPart = useRocketState((s) => s.selectPart);
+  const installingPart = useRocketState((s) => s.installingPart);
+  const setInstallingPart = useRocketState((s) => s.setInstallingPart);
   const resetBuild = useRocketState((s) => s.resetBuild);
   const [preflight, setPreflight] = useState(false);
 
@@ -87,9 +90,14 @@ export default function VABPage() {
                         ? "border-amber-400/50 bg-amber-500/10 text-amber-200"
                         : "border-slate-700 bg-space-800/50 text-slate-500"
                 }`}
-                onClick={() => selectPart(s.part)}
+                onClick={() => {
+                  selectPart(s.part);
+                  // Attached part ⇒ open its Wrench Time installation sequence.
+                  if (inst) setInstallingPart(s.part);
+                }}
+                title={inst && !inst.certified ? "Continue installation" : inst ? "Re-open installation" : "Attach from the parts tray first"}
               >
-                {s.emoji} {s.label} {inst?.certified ? "✅" : inst ? "🟡" : "⬜"}
+                {s.emoji} {s.label} {inst?.certified ? "✅" : inst ? "🔧" : "⬜"}
               </button>
             );
           })}
@@ -130,6 +138,7 @@ export default function VABPage() {
         )}
       </div>
 
+      {installingPart && <InstallSequence part={installingPart} onClose={() => setInstallingPart(null)} />}
       {preflight && <PreflightModal onDone={() => navigate("/launch")} onClose={() => setPreflight(false)} />}
     </div>
   );

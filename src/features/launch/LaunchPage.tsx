@@ -18,7 +18,74 @@ import type { RocketPart } from "../../curriculum/types";
 const PLAYBACK_SPEED = 4; // sim-seconds per real second (slower = more dramatic)
 const MAX_PLAY_SECONDS = 18;
 
-type Phase = "ready" | "countdown" | "flight" | "done";
+type Phase = "ready" | "countdown" | "flight" | "done" | "abort";
+
+/** Layered emissive sphere burst + spark particles + tumbling debris made of
+ *  simple part-shaped meshes — the cartoon-boom for catastrophic failures. */
+function ExplosionFX({ y, drift, startT, clockRef }: { y: number; drift: number; startT: number; clockRef: React.MutableRefObject<{ t: number; altKm: number; y: number }> }) {
+  const core = useRef<THREE.Mesh>(null);
+  const mid = useRef<THREE.Mesh>(null);
+  const outer = useRef<THREE.Mesh>(null);
+  const debris = useRef<THREE.Group>(null);
+  // Deterministic debris directions (the design decides the failure; this is cosmetic).
+  const [chunks] = useState(() =>
+    Array.from({ length: 14 }, (_, i) => ({
+      dir: new THREE.Vector3(Math.sin(i * 2.4), Math.abs(Math.cos(i * 1.7)) * 0.8 + 0.2, Math.cos(i * 3.1)).normalize(),
+      speed: 3 + (i % 5),
+      spin: 2 + (i % 3) * 2,
+      kind: i % 3, // 0 = panel, 1 = fin, 2 = cone
+    })),
+  );
+  useFrame(() => {
+    const age = Math.max(0, clockRef.current.t - startT);
+    const s = Math.min(1, age / 1.2);
+    if (core.current) {
+      core.current.scale.setScalar(0.5 + s * 6);
+      (core.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - s * 1.1);
+    }
+    if (mid.current) {
+      mid.current.scale.setScalar(0.3 + s * 9);
+      (mid.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.7 - s * 0.8);
+    }
+    if (outer.current) {
+      outer.current.scale.setScalar(0.2 + s * 13);
+      (outer.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.35 - s * 0.4);
+    }
+    if (debris.current) {
+      debris.current.children.forEach((c, i) => {
+        const k = chunks[i];
+        c.position.set(k.dir.x * k.speed * age, k.dir.y * k.speed * age - 2 * age * age, k.dir.z * k.speed * age);
+        c.rotation.x += 0.05 * k.spin;
+        c.rotation.z += 0.04 * k.spin;
+      });
+    }
+  });
+  return (
+    <group position={[drift, y + 3, 0]}>
+      <mesh ref={core}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshBasicMaterial color="#fff7cc" transparent opacity={1} />
+      </mesh>
+      <mesh ref={mid}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshBasicMaterial color="#ffb347" transparent opacity={0.7} />
+      </mesh>
+      <mesh ref={outer}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshBasicMaterial color="#ff5d2e" transparent opacity={0.35} />
+      </mesh>
+      <pointLight color="#ffaa55" intensity={30} distance={60} decay={2} />
+      <group ref={debris}>
+        {chunks.map((k, i) => (
+          <mesh key={i}>
+            {k.kind === 0 ? <boxGeometry args={[0.5, 0.7, 0.06]} /> : k.kind === 1 ? <boxGeometry args={[0.05, 0.9, 0.6]} /> : <coneGeometry args={[0.3, 0.7, 8]} />}
+            <meshStandardMaterial color={k.kind === 1 ? "#e5484d" : "#cfd6e4"} emissive="#ff7733" emissiveIntensity={0.6} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+}
 
 /** Rocket that follows the simulated trajectory. */
 function FlyingRocket({
@@ -39,6 +106,9 @@ function FlyingRocket({
   const [staged, setStaged] = useState(false);
   const stagingEvent = flight.events.find((e) => e.label.toLowerCase().includes("staging") || e.label.toLowerCase().includes("booster"));
   const [flame, setFlame] = useState(0);
+  const catastrophe = flight.failures.find((e) => e.severity === "catastrophic");
+  const [exploded, setExploded] = useState(false);
+  const [boomState, setBoomState] = useState<{ y: number; drift: number } | null>(null);
 
   useFrame((_, dt) => {
     if (!group.current) return;
@@ -60,16 +130,31 @@ function FlyingRocket({
       alt = a.altitude + (b.altitude - a.altitude) * frac;
     }
     clockRef.current.altKm = alt;
+    // Lateral drift (gimbal / CG veer) — same interpolation as altitude.
+    let drift = 0;
+    if (idx > 0) {
+      const a = samps[idx - 1], b = samps[idx];
+      const frac = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0;
+      drift = (a.driftX ?? 0) + ((b.driftX ?? 0) - (a.driftX ?? 0)) * frac;
+    }
+    const driftScene = drift * 3;
     // Scene y: log-ish scaling so the rocket visibly climbs then leaves frame
     // No cap — the camera director tracks the rocket at any height
     const y = alt * 3 + t * 0.4;
     clockRef.current.y = y;
+    // Catastrophic moment: swap the rocket for the explosion + debris.
+    if (catastrophe && t >= catastrophe.t && !exploded) {
+      setExploded(true);
+      setBoomState({ y, drift: driftScene });
+    }
     // Camera shake: strong rumble during burn, fading after cutoff
     const burnPhase = t < flight.burnoutT ? 1 : Math.max(0, 1 - (t - flight.burnoutT) * 0.5);
     const shakeAmt = burnPhase * (t < 3 ? 0.12 : 0.05); // extra violent at ignition
     shake.current = (Math.sin(t * 47) * 0.6 + Math.sin(t * 113) * 0.4) * shakeAmt;
     const shakeZ = (Math.sin(t * 71) * 0.5 + Math.cos(t * 97) * 0.5) * shakeAmt * 0.7;
-    group.current.position.set(shake.current, y, shakeZ);
+    group.current.position.set(shake.current + driftScene, y, shakeZ);
+    // Veering rockets visibly lean into the drift.
+    group.current.rotation.z = -Math.min(0.5, Math.abs(drift) * 0.4) * Math.sign(drift);
     const wantStaged = !!stagingEvent && t >= stagingEvent.t;
     if (wantStaged !== staged) setStaged(wantStaged);
     // Flame: ramp up at ignition, full during burn, rapid fade at cutoff
@@ -93,16 +178,20 @@ function FlyingRocket({
 
   return (
     <>
-      <group ref={group}>
-        <Rocket3D
-          design={design}
-          complete
-          engineFlame={playing ? flame : 0}
-          hideBoosters={staged}
-          partLevels={partLevels}
-        />
-      </group>
-
+      {!exploded && (
+        <group ref={group}>
+          <Rocket3D
+            design={design}
+            complete
+            engineFlame={playing ? flame : 0}
+            hideBoosters={staged}
+            partLevels={partLevels}
+          />
+        </group>
+      )}
+      {exploded && boomState && catastrophe && (
+        <ExplosionFX y={boomState.y} drift={boomState.drift} startT={catastrophe.t} clockRef={clockRef} />
+      )}
     </>
   );
 }
@@ -210,6 +299,9 @@ export default function LaunchPage() {
   }, []);
   const [count, setCount] = useState(3);
   const [altReadout, setAltReadout] = useState(0);
+  const [caption, setCaption] = useState<string | null>(null);
+  const [flash, setFlash] = useState(false);
+  const firedEvents = useRef(new Set<number>());
   const [recording, setRecording] = useState(false);
   const [shotOverride, setShotOverride] = useState<number | null>(null);
   const [shotLabel, setShotLabel] = useState("📺 Auto director");
@@ -221,7 +313,13 @@ export default function LaunchPage() {
   const site = SITE_BY_ID[profile?.launchSiteId ?? "canaveral"];
   const dest = DESTINATION_BY_ID[destinationId];
   const quality = tasksTotal > 0 ? tasksCorrect / tasksTotal : 1;
-  const flight = useMemo(() => simulateFlight(design, quality), [design, quality]);
+  const liveFlight = useMemo(() => simulateFlight(design, quality), [design, quality]);
+  // Freeze the flight once the countdown starts: refreshing the profile after
+  // recording the mission must NOT re-simulate and rewrite the outcome shown.
+  const frozenFlightRef = useRef<FlightResult | null>(null);
+  if (phase === "ready") frozenFlightRef.current = null;
+  else if (!frozenFlightRef.current) frozenFlightRef.current = liveFlight;
+  const flight = frozenFlightRef.current ?? liveFlight;
   const reached = flight.maxAltitudeKm >= (dest?.requiredAltitudeKm ?? 150);
 
   // Countdown
@@ -238,6 +336,31 @@ export default function LaunchPage() {
     const id = setTimeout(() => setCount((c) => c - 1), 1000);
     return () => clearTimeout(id);
   }, [phase, count]);
+
+  // Failure captions + explosion audio, driven off the deterministic event list.
+  useEffect(() => {
+    if (phase !== "flight") return;
+    const id = setInterval(() => {
+      const t = clockRef.current.t;
+      for (const e of flight.events) {
+        if ((e.severity === "failure" || e.severity === "catastrophic") && t >= e.t && !firedEvents.current.has(e.t)) {
+          firedEvents.current.add(e.t);
+          setCaption(e.label);
+          if (e.severity === "catastrophic") {
+            sfx.explosion();
+            sfx.rso("We've lost the vehicle. The crew capsule escape tower worked perfectly, again.");
+            setFlash(true);
+            setTimeout(() => setFlash(false), 350);
+          } else {
+            sfx.groan();
+          }
+          setTimeout(() => setCaption((c) => (c === e.label ? null : c)), 5000);
+        }
+      }
+    }, 100);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   // Flight progress → done
   useEffect(() => {
@@ -260,6 +383,7 @@ export default function LaunchPage() {
             reachedDestination: reached,
             screenshot,
             photos: [],
+            outcome: flight.outcome,
           },
           tasksTotal > 0 && tasksCorrect === tasksTotal,
         );
@@ -370,12 +494,66 @@ export default function LaunchPage() {
           <button
             className="pointer-events-auto text-2xl font-black rounded-2xl px-10 py-5 bg-red-600/80 hover:bg-red-500 border-2 border-red-300 shadow-glow transition"
             onClick={() => {
+              if (flight.outcome === "padAbort") {
+                // Critical guidance fault: klaxons, no launch — aborts save rockets.
+                sfx.klaxon();
+                sfx.rso("Hold hold hold. Guidance bus fault. The range is safe — nice catch by the pad computer.");
+                void (async () => {
+                  if (!savedRef.current) {
+                    savedRef.current = true;
+                    setLastFlight({ ...flight });
+                    const { missionId, newPatches } = await recordMission(
+                      {
+                        destinationId,
+                        launchSiteId: site.id,
+                        tasksCorrect,
+                        tasksTotal,
+                        maxAltitudeKm: 0,
+                        reachedDestination: false,
+                        photos: [],
+                        outcome: "padAbort",
+                      },
+                      false,
+                    );
+                    setLastMission(missionId, newPatches);
+                    await refreshProfile();
+                  }
+                })();
+                setPhase("abort");
+                return;
+              }
               setCount(3);
               setPhase("countdown");
             }}
           >
             🔴 LAUNCH
           </button>
+        </div>
+      )}
+
+      {/* Big failure caption banner */}
+      {caption && phase === "flight" && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 max-w-2xl px-6 py-3 rounded-xl border-2 border-red-400 bg-red-950/80 text-red-100 font-black text-center text-lg animate-pulse shadow-glow">
+          ⚠️ {caption}
+        </div>
+      )}
+      {/* White flash on catastrophic events */}
+      {flash && <div className="absolute inset-0 z-30 bg-white/90 pointer-events-none" />}
+
+      {phase === "abort" && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-red-950/50 backdrop-blur-sm">
+          <div className="hud-panel p-6 max-w-md w-full text-center space-y-3 border-2 border-red-400/70">
+            <div className="text-5xl">🚨</div>
+            <h2 className="text-xl font-black text-red-300 neon">HOLD HOLD HOLD — PAD ABORT</h2>
+            <p className="text-sm text-slate-300">
+              The guidance bus failed its power-up self-test and the range safety officer stopped the count.
+              No fireworks today — <b className="text-emerald-300">an abort on the pad saves the whole rocket</b>.
+            </p>
+            <p className="text-xs text-amber-300">The crash investigation shows exactly which wire — and which maths — to fix.</p>
+            <button className="btn-primary w-full justify-center" onClick={() => navigate("/report")}>
+              📋 Open the investigation →
+            </button>
+          </div>
         </div>
       )}
 
@@ -388,10 +566,17 @@ export default function LaunchPage() {
       {phase === "done" && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-space-950/60 backdrop-blur-sm">
           <div className="hud-panel p-6 max-w-md w-full text-center space-y-3">
-            <div className="text-5xl">{reached ? dest?.emoji : "🌤"}</div>
+            <div className="text-5xl">{flight.outcome === "lostVehicle" ? "💥" : reached ? dest?.emoji : "🌤"}</div>
             <h2 className="text-xl font-black text-cyan-200 neon">
-              {reached ? `${dest?.name} reached, Commander!` : "A mighty climb, Commander!"}
+              {flight.outcome === "lostVehicle"
+                ? "Well… that was spectacular, Commander!"
+                : reached
+                  ? `${dest?.name} reached, Commander!`
+                  : "A mighty climb, Commander!"}
             </h2>
+            {flight.outcome === "lostVehicle" && (
+              <p className="text-xs text-emerald-300">The crew capsule escape tower worked perfectly, again. Everyone is fine — the rocket, less so.</p>
+            )}
             <p className="text-sm text-slate-300">
               Peak altitude <span className="text-cyan-300 font-bold">{flight.maxAltitudeKm.toLocaleString("en-GB")} km</span>
               {reached
@@ -399,9 +584,12 @@ export default function LaunchPage() {
                 : ` — ${dest?.name} needs ${dest?.requiredAltitudeKm.toLocaleString("en-GB")} km. The report shows exactly what to tune next time.`}
             </p>
             {flight.struggledOffPad && <p className="text-xs text-amber-300">The rocket strained off the pad — TWR was low.</p>}
-            {flight.tumbled && <p className="text-xs text-amber-300">It tumbled in the wind — more fin stability would help.</p>}
+            {flight.tumbled && flight.failures.length === 0 && <p className="text-xs text-amber-300">It tumbled in the wind — more fin stability would help.</p>}
+            {flight.failures.slice(0, 2).map((f) => (
+              <p key={f.t + f.label} className="text-xs text-red-300">⚠️ {f.label}</p>
+            ))}
             <button className="btn-primary w-full justify-center" onClick={() => navigate("/report")}>
-              📋 After-action report →
+              {flight.failures.length > 0 ? "🕵️ Crash investigation →" : "📋 After-action report →"}
             </button>
           </div>
         </div>

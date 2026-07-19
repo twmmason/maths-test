@@ -54,6 +54,9 @@ describe("simulateFlight", () => {
     expect(flight.maxAltitudeKm).toBeGreaterThan(10);
     expect(flight.events.some((e) => e.label === "Liftoff")).toBe(true);
     expect(flight.events.some((e) => e.label.includes("Apogee"))).toBe(true);
+    // Wrench Time: a correctly-configured rocket flies nominal, no failures.
+    expect(flight.outcome).toBe("nominal");
+    expect(flight.failures).toHaveLength(0);
   });
 
   it("higher engineering quality flies higher", () => {
@@ -66,6 +69,7 @@ describe("simulateFlight", () => {
     const flight = simulateFlight(design({ finCount: 1 }), 1);
     expect(flight.tumbled).toBe(true);
     expect(flight.maxAltitudeKm).toBeLessThanOrEqual(30);
+    expect(flight.outcome).not.toBe("nominal");
   });
 
   it("boosters create a staging event", () => {
