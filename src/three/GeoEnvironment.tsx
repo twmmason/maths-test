@@ -46,10 +46,34 @@ function dateFromSolarHour(hour: number, longitudeDeg: number, dayOfYear = 172):
   return new Date(base + (dayOfYear - 1) * 86_400_000 + utcHours * 3_600_000);
 }
 
-/** Rough WGS84 geoid/terrain ellipsoid-height estimate (no backend). */
+/** Rough WGS84 geoid/terrain ellipsoid-height estimate (fallback). */
 function estimateEllipsoidHeight(lat: number): number {
   const absLat = Math.abs(lat);
   return 10 + 0.9 * absLat - 0.004 * absLat * absLat;
+}
+
+/** Fetch the real terrain elevation from Google Elevation API.
+ *  Returns ellipsoid height (geoid-adjusted) for the 3D Tiles reorientation.
+ *  Falls back to the rough estimate if the API fails. */
+async function fetchElevation(lat: number, lon: number): Promise<number> {
+  const fallback = estimateEllipsoidHeight(lat);
+  if (!HAS_MAPS_KEY) return fallback;
+  try {
+    const url = `https://maps.googleapis.com/maps/api/elevation/json?locations=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) return fallback;
+    const data = await res.json();
+    const elev: number | undefined = data?.results?.[0]?.elevation;
+    if (elev != null) {
+      // Add ~30m geoid undulation (WGS84→EGM96 offset for mid-latitudes)
+      const geoidOffset = 30 + 0.3 * Math.abs(lat) - 0.003 * lat * lat;
+      console.log(`[tiles] elevation API: terrain ${elev.toFixed(1)}m + geoid ~${geoidOffset.toFixed(0)}m`);
+      return elev + geoidOffset;
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 /** Error boundary: a tiles crash silently unmounts + retries, never takes
@@ -88,7 +112,11 @@ const FADE_BAND = 6;
  *  dither-faded disc cleared around the launchpad. */
 function SiteTiles({ site }: { site: LaunchSite }) {
   const [disabled, setDisabled] = useState(false);
-  const height = estimateEllipsoidHeight(site.lat);
+  const [height, setHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchElevation(site.lat, site.lon).then(setHeight);
+  }, [site.lat, site.lon]);
 
   // Validate the key up front — the TilesRenderer fails silently otherwise.
   useEffect(() => {
@@ -188,7 +216,7 @@ function SiteTiles({ site }: { site: LaunchSite }) {
     });
   }, []);
 
-  if (!HAS_MAPS_KEY || disabled) return null;
+  if (!HAS_MAPS_KEY || disabled || height === null) return null;
   return (
     <TilesErrorBoundary>
       <group>

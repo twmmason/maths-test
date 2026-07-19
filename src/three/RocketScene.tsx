@@ -34,18 +34,52 @@ export function Launchpad({ site, towerRetracted = false, ground = true }: { sit
         <cylinderGeometry args={[2.2, 2.5, 0.25, 24]} />
         <meshStandardMaterial color="#4a5066" roughness={0.8} metalness={0.2} />
       </mesh>
-      {/* Service tower (retracts at launch) */}
-      <group ref={towerRef} position={[3.4, -0.3, 0]}>
-        <mesh position={[0, 4.5, 0]} castShadow>
-          <boxGeometry args={[0.7, 9, 0.7]} />
-          <meshStandardMaterial color="#a33b3b" roughness={0.6} metalness={0.4} />
-        </mesh>
-        {[2, 4, 6].map((y) => (
-          <mesh key={y} position={[-1.2, y, 0]}>
-            <boxGeometry args={[1.8, 0.12, 0.3]} />
-            <meshStandardMaterial color="#c05050" roughness={0.6} />
+      {/* Service tower — industrial lattice with cross-bracing */}
+      <group ref={towerRef} position={[3.8, -0.3, 0]}>
+        {/* Four corner columns */}
+        {[[-0.4, -0.4], [-0.4, 0.4], [0.4, -0.4], [0.4, 0.4]].map(([x, z], i) => (
+          <mesh key={`col${i}`} position={[x, 5.5, z]} castShadow>
+            <boxGeometry args={[0.15, 11, 0.15]} />
+            <meshStandardMaterial color="#5a5a5a" roughness={0.5} metalness={0.6} />
           </mesh>
         ))}
+        {/* Horizontal platforms */}
+        {[0, 2.5, 5, 7.5, 10].map((y) => (
+          <mesh key={`plat${y}`} position={[0, y, 0]} castShadow>
+            <boxGeometry args={[1.0, 0.08, 1.0]} />
+            <meshStandardMaterial color="#666" roughness={0.7} metalness={0.4} />
+          </mesh>
+        ))}
+        {/* Cross-bracing (X pattern on each face) */}
+        {[0, Math.PI / 2].map((rot) =>
+          [0, 2.5, 5, 7.5].map((y) => (
+            <group key={`brace${rot}-${y}`} rotation={[0, rot, 0]}>
+              <mesh position={[0, y + 1.25, 0.4]} rotation={[0, 0, 0.46]} castShadow>
+                <boxGeometry args={[0.06, 2.8, 0.06]} />
+                <meshStandardMaterial color="#d45500" roughness={0.5} metalness={0.4} />
+              </mesh>
+              <mesh position={[0, y + 1.25, 0.4]} rotation={[0, 0, -0.46]} castShadow>
+                <boxGeometry args={[0.06, 2.8, 0.06]} />
+                <meshStandardMaterial color="#d45500" roughness={0.5} metalness={0.4} />
+              </mesh>
+            </group>
+          ))
+        )}
+        {/* Crew access arm (swings away at launch) */}
+        <mesh position={[-1.6, 7, 0]} castShadow>
+          <boxGeometry args={[2.8, 0.2, 0.5]} />
+          <meshStandardMaterial color="#888" roughness={0.5} metalness={0.5} />
+        </mesh>
+        {/* Lightning rod */}
+        <mesh position={[0, 11.5, 0]}>
+          <cylinderGeometry args={[0.03, 0.03, 2, 6]} />
+          <meshStandardMaterial color="#aaa" metalness={0.8} roughness={0.3} />
+        </mesh>
+        {/* Warning stripes at base */}
+        <mesh position={[0, 0.15, 0]}>
+          <boxGeometry args={[1.2, 0.3, 1.2]} />
+          <meshStandardMaterial color="#e8c020" roughness={0.6} />
+        </mesh>
       </group>
       {/* Distant hills (stylised fallback only) */}
       {ground && [[-40, 18, -60], [50, 14, -70], [-65, 10, 20], [60, 16, 40]].map(([x, r, z], i) => (

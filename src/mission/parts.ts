@@ -14,11 +14,11 @@ export function criteriaForPart(part: RocketPart, keyStage: KeyStage = "ks2"): s
 
 /** SpaceX Falcon-9-inspired palette: clean white body, dark interstage, silver nose. */
 export const PART_MATERIALS: Record<RocketPart, { color: string; roughness: number; metalness: number; opacity?: number }> = {
-  noseCone: { color: "#e8edf5", roughness: 0.15, metalness: 0.55 },   // silver-white fairing
-  hull: { color: "#f0f2f5", roughness: 0.22, metalness: 0.35 },       // clean white body
+  noseCone: { color: "#dce1ee", roughness: 0.12, metalness: 0.72 },   // polished silver fairing
+  hull: { color: "#eaedf2", roughness: 0.18, metalness: 0.48 },       // brushed-white body
   fuelTank: { color: "#d0e8f0", roughness: 0.12, metalness: 0.2, opacity: 0.6 }, // pale translucent LOX tank
-  engine: { color: "#2a2e38", roughness: 0.28, metalness: 0.72 },     // dark engine section (Merlin cluster)
-  fins: { color: "#3a3f4a", roughness: 0.3, metalness: 0.5 },         // dark titanium grid fins
+  engine: { color: "#1e2028", roughness: 0.2, metalness: 0.85 },      // dark polished engine bell
+  fins: { color: "#2e3340", roughness: 0.22, metalness: 0.65 },       // titanium grid fins
   payloadBay: { color: "#c8cdd6", roughness: 0.2, metalness: 0.4 },   // light grey payload adapter
   electronics: { color: "#1a2030", roughness: 0.25, metalness: 0.6 }, // black avionics band
   booster: { color: "#e8eaed", roughness: 0.2, metalness: 0.4 },      // white side boosters
