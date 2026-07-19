@@ -201,9 +201,6 @@ export default function RocketScene({
           </Suspense>
         </>
       )}
-      {/* Env probe for PBR reflections on the rocket's meshPhysicalMaterial */}
-      <Environment preset="sunset" background={false} environmentIntensity={0.8} />
-
       {controlsEnabled && <CameraRig focusY={focusY} distance={cameraDistance} />}
       {controlsEnabled && (
         <OrbitControls
