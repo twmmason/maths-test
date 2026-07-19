@@ -1,6 +1,6 @@
 import type { GeneratedTask } from "../engine/types";
 import { generateText } from "./gemini";
-import { FLIGHT_DIRECTOR_SYSTEM, validateParaphrase } from "./flightDirector";
+import { flightDirectorSystem, validateParaphrase } from "./flightDirector";
 
 const cache = new Map<string, string>();
 
@@ -20,7 +20,7 @@ export async function paraphraseBriefing(task: GeneratedTask): Promise<string> {
 
 Briefing: "${task.briefing}"`;
 
-  const out = await generateText(prompt, FLIGHT_DIRECTOR_SYSTEM);
+  const out = await generateText(prompt, flightDirectorSystem());
   if (out && validateParaphrase(task.briefing, out.trim())) {
     cache.set(task.id, out.trim());
     return out.trim();

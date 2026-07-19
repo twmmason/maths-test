@@ -1,5 +1,5 @@
-import { db, type MissionRecord, type Profile } from "../db/db";
-import { PROFILE_ID } from "../db/seed";
+import { db, attemptsFor, missionsFor, type MissionRecord, type Profile } from "../db/db";
+import { getActiveProfileId } from "../db/seed";
 import { evaluatePatches } from "./patches";
 import { computeMastery, allPartLevels } from "../engine/mastery";
 
@@ -13,9 +13,10 @@ export async function recordMission(
   perfect: boolean,
 ): Promise<{ missionId: number; newPatches: string[] }> {
   const createdAt = Date.now();
-  const missionId = (await db.missions.add({ ...record, createdAt })) as number;
+  const profileId = getActiveProfileId() ?? "commander";
+  const missionId = (await db.missions.add({ ...record, profileId, createdAt })) as number;
 
-  const profile = (await db.profiles.get(PROFILE_ID)) as Profile;
+  const profile = (await db.profiles.get(profileId)) as Profile;
   const today = dayString(createdAt);
   const yesterday = dayString(createdAt - 24 * 60 * 60 * 1000);
   let streak = profile.launchStreak;
@@ -27,8 +28,8 @@ export async function recordMission(
     streak = 1;
   }
 
-  const missions = await db.missions.toArray();
-  const attempts = await db.attempts.toArray();
+  const missions = await missionsFor(profileId);
+  const attempts = await attemptsFor(profileId);
   const mastery = computeMastery(attempts);
 
   const updated: Profile = {
@@ -45,6 +46,6 @@ export async function recordMission(
   updated.patches = [...updated.patches, ...newPatches];
   await db.profiles.put(updated);
   // Clear any saved mid-build mission — this one is complete.
-  await db.savedMissions.delete("current");
+  await db.savedMissions.delete(profileId);
   return { missionId, newPatches };
 }

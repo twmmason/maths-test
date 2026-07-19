@@ -105,6 +105,20 @@ Done-when verified: destinations unlock at thresholds; coverage map renders per-
 9. ✅ Mission photo via Mission Camera saved to Flight Log scrapbook — signed off 2026-07-19
 10. ✅ Return visits: rocket design persists, part levels upgrade with mastery — signed off 2026-07-19
 
+## Post-launch feedback: multi-profile "Rocket Lab" (2026-07-19)
+- [x] Commander profile picker on load — pick a returning commander or type any
+  name (Artie, Walter, …); app becomes "{Name}'s Rocket Lab" everywhere
+- [x] Dexie v2 migration: attempts/missions stamped with `profileId`, saved
+  missions keyed per profile; legacy data assigned to "artie"
+- [x] Per-profile rocket design, XP, streaks, patches, mastery, launch site,
+  flight log and mission scrapbook — fully isolated between commanders
+- [x] AI layer personalised: Flight Director / Chief Engineer prompts address
+  the active commander by name (`src/ai/commander.ts` cache)
+- [x] "Change commander" button in the nav returns to the picker
+Verified in browser: created Walter (SaxaVord) and Artie (Canaveral) profiles,
+switched between them — separate sites/stats, both listed as returning
+commanders. `pnpm verify` green (276 tests, 81/81 coverage).
+
 ### Full-mission end-to-end run (2026-07-19, second pass)
 Hangar → Low Orbit → VAB (attached & certified Nose + Hull + Day Tank + Engine
 through their engineering tasks, live performance dashboard updating) →

@@ -9,6 +9,7 @@ import ReportPage from "../features/report/ReportPage";
 import FlightLogPage from "../features/flightlog/FlightLogPage";
 import SandboxPage from "../features/sandbox/SandboxPage";
 import DevStatusPage from "../features/dev/DevStatusPage";
+import ProfilePicker from "../features/profile/ProfilePicker";
 import { useState } from "react";
 
 const links = [
@@ -23,6 +24,7 @@ export default function App() {
   const init = useRocketState((s) => s.init);
   const ready = useRocketState((s) => s.ready);
   const profile = useRocketState((s) => s.profile);
+  const switchProfile = useRocketState((s) => s.switchProfile);
   const [sound, setSound] = useState(soundEnabled());
 
   useEffect(() => {
@@ -37,10 +39,14 @@ export default function App() {
     );
   }
 
+  if (!profile) {
+    return <ProfilePicker />;
+  }
+
   return (
     <div className="h-full flex flex-col">
       <nav className="flex items-center gap-2 px-4 py-2 border-b border-cyan-500/20 bg-space-900/70 backdrop-blur z-20">
-        <span className="text-lg font-bold neon text-cyan-300 mr-2">🚀 Artie's Rocket Lab</span>
+        <span className="text-lg font-bold neon text-cyan-300 mr-2">🚀 {profile.name}'s Rocket Lab</span>
         {links.map((l) => (
           <NavLink
             key={l.to}
@@ -66,8 +72,16 @@ export default function App() {
           >
             {sound ? "🔊 Sound on" : "🔇 Sound off"}
           </button>
-          <span className="text-amber-300">⭐ {profile?.xp ?? 0} XP</span>
-          <span className="text-orange-300">🔥 {profile?.launchStreak ?? 0} day streak</span>
+          <span className="text-amber-300">⭐ {profile.xp} XP</span>
+          <span className="text-orange-300">🔥 {profile.launchStreak} day streak</span>
+          <button
+            className="btn-ghost !px-2 !py-1 text-xs"
+            onClick={switchProfile}
+            title="Change commander"
+            aria-label="Change commander"
+          >
+            🧑‍🚀 {profile.name} ↩
+          </button>
         </div>
       </nav>
       <main className="flex-1 min-h-0 overflow-auto">

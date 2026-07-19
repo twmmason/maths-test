@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { db, type MissionRecord, type Attempt } from "../../db/db";
+import { attemptsFor, missionsFor, type MissionRecord, type Attempt } from "../../db/db";
+import { getActiveProfileId } from "../../db/seed";
 import { useRocketState } from "../../mission/useRocketState";
 import { computeMastery, masteryPercent, type CriterionMastery } from "../../engine/mastery";
 import { CRITERIA, STRANDS } from "../../curriculum/criteria";
@@ -53,8 +54,9 @@ export default function FlightLogPage() {
   const [attempts, setAttempts] = useState<Attempt[]>([]);
 
   useEffect(() => {
-    void db.missions.orderBy("createdAt").reverse().toArray().then(setMissions);
-    void db.attempts.toArray().then(setAttempts);
+    const pid = getActiveProfileId() ?? "";
+    void missionsFor(pid).then((ms) => setMissions(ms.sort((a, b) => b.createdAt - a.createdAt)));
+    void attemptsFor(pid).then(setAttempts);
   }, []);
 
   const mastery = computeMastery(attempts);

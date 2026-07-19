@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import type { RocketPart } from "../curriculum/types";
 import { emptyDesign, type RocketDesign } from "../three/rocketDesign";
-import { db, type Profile, type Attempt } from "../db/db";
-import { ensureSeeded, PROFILE_ID } from "../db/seed";
+import { db, attemptsFor, type Profile, type Attempt } from "../db/db";
+import { loadActiveProfile, getActiveProfileId, clearActiveProfileId } from "../db/seed";
 import { xpForAttempt, computeMastery, masteryPercent } from "../engine/mastery";
 import { planPart, type PartPlan } from "./runPlanner";
 import { VARIANT_BY_ID, type PartVariant } from "./partsCatalog";
@@ -39,16 +39,24 @@ export interface RocketState {
   setLastFlight: (f: (FlightResult & { screenshot?: string }) | null) => void;
   setLastMission: (id: number | null, patches: string[]) => void;
   resetBuild: () => Promise<void>;
+  /** Called once a commander has been picked/created — loads their world. */
+  activateProfile: (profile: Profile) => Promise<void>;
+  /** Log out to the commander picker. */
+  switchProfile: () => void;
 }
 
 async function persistDesign(design: RocketDesign) {
-  const profile = await db.profiles.get(PROFILE_ID);
+  const id = getActiveProfileId();
+  if (!id) return;
+  const profile = await db.profiles.get(id);
   if (profile) await db.profiles.put({ ...profile, rocketDesign: design, lastPlayedAt: Date.now() });
 }
 
 async function persistMission(state: Pick<RocketState, "destinationId" | "design" | "completedTasks" | "tasksCorrect" | "tasksTotal">) {
+  const id = getActiveProfileId();
+  if (!id) return;
   await db.savedMissions.put({
-    id: "current",
+    id,
     destinationId: state.destinationId,
     design: state.design,
     completedTasks: state.completedTasks as Record<string, string[]>,
@@ -74,9 +82,14 @@ export const useRocketState = create<RocketState>((set, get) => ({
   lastNewPatches: [],
 
   init: async () => {
-    const profile = await ensureSeeded();
-    const attempts = await db.attempts.toArray();
-    const saved = await db.savedMissions.get("current");
+    const profile = await loadActiveProfile();
+    if (!profile) {
+      // No commander picked yet — App shows the profile picker.
+      set({ ready: true, profile: null });
+      return;
+    }
+    const attempts = await attemptsFor(profile.id);
+    const saved = await db.savedMissions.get(profile.id);
     const design = saved?.design ?? profile.rocketDesign ?? emptyDesign();
     const partPlans: Partial<Record<RocketPart, PartPlan>> = {};
     for (const part of Object.keys(design.installedParts) as RocketPart[]) {
@@ -114,7 +127,7 @@ export const useRocketState = create<RocketState>((set, get) => ({
     const variant: PartVariant | undefined = VARIANT_BY_ID[variantId];
     if (!variant) return;
     const state = get();
-    const attempts = await db.attempts.toArray();
+    const attempts = state.profile ? await attemptsFor(state.profile.id) : [];
     const design: RocketDesign = {
       ...state.design,
       ...variant.stats,
@@ -172,7 +185,8 @@ export const useRocketState = create<RocketState>((set, get) => ({
   },
 
   recordAttempt: async (criterionCode, tier, correct, hintsUsed) => {
-    const attempt: Attempt = { criterionCode, tier, correct, hintsUsed, createdAt: Date.now() };
+    const profileId = get().profile?.id ?? getActiveProfileId() ?? "commander";
+    const attempt: Attempt = { profileId, criterionCode, tier, correct, hintsUsed, createdAt: Date.now() };
     await db.attempts.add(attempt);
     const profile = get().profile;
     if (profile) {
@@ -212,7 +226,8 @@ export const useRocketState = create<RocketState>((set, get) => ({
   },
 
   refreshMastery: async () => {
-    const attempts = await db.attempts.toArray();
+    const profile = get().profile;
+    const attempts = profile ? await attemptsFor(profile.id) : [];
     set({ masteryPct: masteryPercent(computeMastery(attempts)) });
   },
 
@@ -223,6 +238,31 @@ export const useRocketState = create<RocketState>((set, get) => ({
     const design = emptyDesign();
     set({ design, partPlans: {}, completedTasks: {}, tasksCorrect: 0, tasksTotal: 0, selectedPart: null });
     await persistDesign(design);
-    await db.savedMissions.delete("current");
+    const id = getActiveProfileId();
+    if (id) await db.savedMissions.delete(id);
+  },
+
+  activateProfile: async (profile) => {
+    await db.profiles.put({ ...profile, lastPlayedAt: Date.now() });
+    set({ ready: false });
+    await get().init();
+  },
+
+  switchProfile: () => {
+    clearActiveProfileId();
+    set({
+      profile: null,
+      design: emptyDesign(),
+      destinationId: "lowOrbit",
+      selectedPart: null,
+      partPlans: {},
+      completedTasks: {},
+      tasksCorrect: 0,
+      tasksTotal: 0,
+      masteryPct: 0,
+      lastFlight: null,
+      lastMissionId: null,
+      lastNewPatches: [],
+    });
   },
 }));
