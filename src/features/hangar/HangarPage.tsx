@@ -38,7 +38,22 @@ export default function HangarPage() {
 
   return (
     <div className="relative h-full">
-      <div className="absolute inset-0">
+      <div
+        className="absolute inset-0"
+        onPointerDown={() => {
+          if (photoOverlay && photoMode) {
+            // User started dragging the 3D scene — dismiss photo instantly
+            setPhotoOverlay(null);
+          }
+        }}
+        onPointerUp={() => {
+          if (!photoOverlay && photoMode && lastPhotoMode.current && !photoBusy) {
+            // User finished dragging — re-capture from the new angle after a brief settle
+            setPhotoBusy(true);
+            setTimeout(() => viewSwitcherRef.current?.recapture(), 400);
+          }
+        }}
+      >
         <RocketScene site={site} autoRotate={!photoMode} onCanvasReady={(c) => (canvasRef.current = c)}>
           <Rocket3D design={design} complete partLevels={profile?.partLevels} />
         </RocketScene>
@@ -126,25 +141,8 @@ export default function HangarPage() {
         </div>
       )}
       {photoOverlay && photoMode && !photoBusy && (
-        <div
-          className="absolute inset-0 z-20"
-          onPointerDown={() => {
-            // Dismiss the photo so the live 3D is visible while dragging.
-            setPhotoOverlay(null);
-            const downTime = Date.now();
-            const onUp = () => {
-              window.removeEventListener("pointerup", onUp);
-              // Only re-render if the user actually dragged (held > 250ms).
-              // A quick click just dismisses the photo without re-triggering.
-              if (Date.now() - downTime > 250 && lastPhotoMode.current) {
-                setPhotoBusy(true);
-                setTimeout(() => viewSwitcherRef.current?.recapture(), 300);
-              }
-            };
-            window.addEventListener("pointerup", onUp, { once: true });
-          }}
-        >
-          <img src={photoOverlay} alt="Mission photo" className="w-full h-full object-cover pointer-events-none" />
+        <div className="absolute inset-0 z-20 pointer-events-none">
+          <img src={photoOverlay} alt="Mission photo" className="w-full h-full object-cover" />
         </div>
       )}
 
