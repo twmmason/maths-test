@@ -10,6 +10,7 @@ import { DESTINATION_BY_ID } from "../../mission/destinations";
 import { simulateFlight } from "../../physics/simulateFlight";
 import { recordMission } from "../../mission/recordMission";
 import { sfx } from "../../mission/sound";
+import TimeOfDaySlider from "../../components/TimeOfDaySlider";
 import { useEffect as useEffectOnce } from "react";
 import type { FlightResult } from "../../physics/types";
 import type { RocketDesign } from "../../three/rocketDesign";
@@ -29,117 +30,238 @@ function warpFor(altKm: number): number {
 
 type Phase = "ready" | "countdown" | "flight" | "done" | "abort";
 
-/** Layered emissive fireball bursts + shockwave ring + billowing smoke +
- *  flaming tumbling debris — the cartoon-boom for catastrophic failures. */
+/** Deterministic 0..1 hash for cosmetic variation (no RNG deciding physics). */
+const h01 = (i: number, salt: number) => {
+  const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+/** Hollywood boom: layered turbulent fireball + secondary fuel bursts +
+ *  shockwave + 80 spark streaks + 44 recognisable rocket fragments, each
+ *  trailing its own flame, + fire column + lingering smoke. All timing is
+ *  driven off the deterministic sim clock. */
 function ExplosionFX({ y, drift, startT, clockRef }: { y: number; drift: number; startT: number; clockRef: React.MutableRefObject<{ t: number; altKm: number; y: number }> }) {
   const core = useRef<THREE.Mesh>(null);
   const mid = useRef<THREE.Mesh>(null);
   const outer = useRef<THREE.Mesh>(null);
   const second = useRef<THREE.Mesh>(null);
+  const third = useRef<THREE.Mesh>(null);
   const ring = useRef<THREE.Mesh>(null);
+  const column = useRef<THREE.Mesh>(null);
   const light = useRef<THREE.PointLight>(null);
   const debris = useRef<THREE.Group>(null);
+  const sparks = useRef<THREE.Group>(null);
   const smoke = useRef<THREE.Group>(null);
-  // Deterministic debris directions (the design decides the failure; this is cosmetic).
+
+  // Recognisable rocket fragments: hull panels, fin plates, tank ring
+  // segments, the nose cone, engine bells — with per-chunk flame trails.
   const [chunks] = useState(() =>
-    Array.from({ length: 26 }, (_, i) => ({
-      dir: new THREE.Vector3(Math.sin(i * 2.4) + Math.cos(i * 0.9) * 0.4, Math.abs(Math.cos(i * 1.7)) * 0.9 + 0.15, Math.cos(i * 3.1) + Math.sin(i * 1.3) * 0.4).normalize(),
-      speed: 4 + (i % 7) * 1.5,
-      spin: 2 + (i % 4) * 2,
-      kind: i % 3, // 0 = panel, 1 = fin, 2 = cone
-    })),
+    Array.from({ length: 44 }, (_, i) => {
+      const dir = new THREE.Vector3(
+        Math.sin(i * 2.4) + (h01(i, 1) - 0.5) * 1.2,
+        Math.abs(Math.cos(i * 1.7)) * 1.1 + 0.2,
+        Math.cos(i * 3.1) + (h01(i, 2) - 0.5) * 1.2,
+      ).normalize();
+      return {
+        dir,
+        // trail cone points back along the velocity
+        trailQuat: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().negate()),
+        speed: 5 + h01(i, 3) * 11,
+        spinX: (h01(i, 4) - 0.5) * 14,
+        spinZ: (h01(i, 5) - 0.5) * 14,
+        kind: i % 5, // 0 panel, 1 fin, 2 cone, 3 ring segment, 4 engine bell
+        size: 0.7 + h01(i, 6) * 0.9,
+        burns: h01(i, 7) > 0.25, // most fragments burn
+      };
+    }),
+  );
+  const [streaks] = useState(() =>
+    Array.from({ length: 80 }, (_, i) => {
+      const dir = new THREE.Vector3(
+        Math.sin(i * 0.79) + (h01(i, 8) - 0.5),
+        h01(i, 9) * 1.4 - 0.15,
+        Math.cos(i * 1.13) + (h01(i, 10) - 0.5),
+      ).normalize();
+      return {
+        dir,
+        quat: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir),
+        speed: 14 + h01(i, 11) * 26,
+        len: 0.5 + h01(i, 12) * 1.3,
+        life: 0.45 + h01(i, 13) * 0.55,
+      };
+    }),
   );
   const [puffs] = useState(() =>
-    Array.from({ length: 12 }, (_, i) => ({
-      dir: new THREE.Vector3(Math.sin(i * 1.9), 0.4 + Math.abs(Math.sin(i * 0.7)) * 0.7, Math.cos(i * 2.3)).normalize(),
-      speed: 1.5 + (i % 4) * 0.8,
-      size: 1.2 + (i % 3) * 0.8,
+    Array.from({ length: 18 }, (_, i) => ({
+      dir: new THREE.Vector3(Math.sin(i * 1.9), 0.35 + h01(i, 14) * 0.8, Math.cos(i * 2.3)).normalize(),
+      speed: 1.5 + h01(i, 15) * 2.6,
+      size: 1.4 + h01(i, 16) * 1.6,
+      delay: h01(i, 17) * 0.5,
     })),
   );
+
   useFrame(() => {
     const age = Math.max(0, clockRef.current.t - startT);
-    const s = Math.min(1, age / 1.4);
+    const s = Math.min(1, age / 1.5);
+    // turbulence — the fireball boils rather than inflating smoothly
+    const wob = 1 + Math.sin(age * 31) * 0.07 + Math.sin(age * 57 + 1.3) * 0.05;
     if (core.current) {
-      core.current.scale.setScalar(0.6 + s * 11);
-      (core.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - s * 1.15);
+      core.current.scale.setScalar((0.8 + s * 13) * wob);
+      (core.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - s * 1.1);
     }
     if (mid.current) {
-      mid.current.scale.setScalar(0.4 + s * 16);
-      (mid.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.85 - s * 0.95);
+      mid.current.scale.set((0.5 + s * 19) * wob, (0.5 + s * 17) / wob, (0.5 + s * 19) * wob);
+      (mid.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.9 - s * 0.95);
     }
     if (outer.current) {
-      outer.current.scale.setScalar(0.3 + s * 24);
-      (outer.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.45 - s * 0.5);
+      outer.current.scale.setScalar((0.4 + s * 28) / wob);
+      (outer.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.5 - s * 0.55);
     }
-    // Secondary burst — the fuel goes up a beat after the airframe.
-    const s2 = Math.max(0, Math.min(1, (age - 0.35) / 1.2));
+    // Secondary + tertiary bursts — tanks cook off one after another.
+    const s2 = Math.max(0, Math.min(1, (age - 0.3) / 1.1));
     if (second.current) {
-      second.current.scale.setScalar(0.2 + s2 * 14);
-      (second.current.material as THREE.MeshBasicMaterial).opacity = s2 > 0 ? Math.max(0, 0.9 - s2 * 1.0) : 0;
+      second.current.scale.setScalar((0.2 + s2 * 17) * wob);
+      (second.current.material as THREE.MeshBasicMaterial).opacity = s2 > 0 ? Math.max(0, 0.95 - s2 * 1.05) : 0;
     }
-    // Expanding shockwave ring.
+    const s3 = Math.max(0, Math.min(1, (age - 0.7) / 1.2));
+    if (third.current) {
+      third.current.scale.setScalar((0.2 + s3 * 12) / wob);
+      (third.current.material as THREE.MeshBasicMaterial).opacity = s3 > 0 ? Math.max(0, 0.85 - s3 * 0.95) : 0;
+    }
     if (ring.current) {
-      ring.current.scale.setScalar(0.5 + s * 30);
-      (ring.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.5 - s * 0.55);
+      ring.current.scale.setScalar(0.5 + s * 38);
+      (ring.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.55 - s * 0.6);
     }
-    if (light.current) light.current.intensity = Math.max(0, 90 * (1 - s)) + (s2 > 0 ? 50 * (1 - s2) : 0);
+    // Rising fire column under the blast.
+    if (column.current) {
+      const cs = Math.min(1, age / 0.9);
+      column.current.scale.set(1 + cs * 2.5, 1 + cs * 6, 1 + cs * 2.5);
+      column.current.position.y = -3 + cs * 3;
+      (column.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.7 - age * 0.45);
+    }
+    if (light.current)
+      light.current.intensity =
+        Math.max(0, 140 * (1 - s)) + (s2 > 0 ? 80 * (1 - s2) : 0) + (s3 > 0 ? 50 * (1 - s3) : 0) + Math.sin(age * 41) * 12 * (1 - s);
+    // Fragments: ballistic arcs, tumbling, each with a shrinking flame trail.
     if (debris.current) {
       debris.current.children.forEach((c, i) => {
         const k = chunks[i];
-        c.position.set(k.dir.x * k.speed * age, k.dir.y * k.speed * age - 3 * age * age, k.dir.z * k.speed * age);
-        c.rotation.x += 0.06 * k.spin;
-        c.rotation.z += 0.05 * k.spin;
+        const g = c as THREE.Group;
+        g.position.set(k.dir.x * k.speed * age, k.dir.y * k.speed * age - 4.5 * age * age, k.dir.z * k.speed * age);
+        g.rotation.x += 0.016 * k.spinX;
+        g.rotation.z += 0.016 * k.spinZ;
+        const trail = g.children[1] as THREE.Mesh | undefined;
+        if (trail) {
+          const burn = k.burns ? Math.max(0, 1 - age / 2.6) : 0;
+          trail.scale.set(burn * (0.8 + Math.sin(age * 43 + i) * 0.25), burn * (1.6 + Math.sin(age * 37 + i * 2) * 0.5), burn);
+          (trail.material as THREE.MeshBasicMaterial).opacity = burn * 0.9;
+        }
       });
     }
-    // Smoke: billowing dark puffs that grow, drift up and linger (~6 s).
+    // Sparks: fast, short-lived white-hot streaks.
+    if (sparks.current) {
+      sparks.current.children.forEach((c, i) => {
+        const k = streaks[i];
+        const f = Math.max(0, 1 - age / k.life);
+        c.position.set(k.dir.x * k.speed * age, k.dir.y * k.speed * age - 5 * age * age, k.dir.z * k.speed * age);
+        ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = f;
+        c.scale.set(f, 1 + age * 2, f);
+      });
+    }
+    // Smoke: dark billowing puffs that grow and linger ~8 s.
     if (smoke.current) {
-      const sAge = Math.max(0, age - 0.2);
-      const fade = Math.max(0, 1 - sAge / 6);
       smoke.current.children.forEach((c, i) => {
         const p = puffs[i];
-        c.position.set(p.dir.x * p.speed * sAge, p.dir.y * p.speed * sAge + sAge * 0.8, p.dir.z * p.speed * sAge);
-        c.scale.setScalar(p.size * (0.4 + sAge * 1.1));
-        ((c as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity = 0.55 * fade;
+        const sAge = Math.max(0, age - 0.15 - p.delay);
+        const fade = Math.max(0, 1 - sAge / 8);
+        c.position.set(p.dir.x * p.speed * sAge, p.dir.y * p.speed * sAge + sAge * 1.1, p.dir.z * p.speed * sAge);
+        c.scale.setScalar(p.size * (0.3 + sAge * 1.3));
+        ((c as THREE.Mesh).material as THREE.MeshStandardMaterial).opacity = 0.6 * fade;
       });
     }
   });
   return (
     <group position={[drift, y + 3, 0]}>
+      {/* fireball layers */}
       <mesh ref={core}>
-        <sphereGeometry args={[1, 20, 20]} />
+        <sphereGeometry args={[1, 24, 24]} />
         <meshBasicMaterial color="#ffffff" transparent opacity={1} depthWrite={false} />
       </mesh>
       <mesh ref={mid}>
-        <sphereGeometry args={[1, 20, 20]} />
-        <meshBasicMaterial color="#ffb347" transparent opacity={0.85} depthWrite={false} />
+        <sphereGeometry args={[1, 24, 24]} />
+        <meshBasicMaterial color="#ffb030" transparent opacity={0.9} depthWrite={false} blending={THREE.AdditiveBlending} />
       </mesh>
       <mesh ref={outer}>
-        <sphereGeometry args={[1, 20, 20]} />
-        <meshBasicMaterial color="#ff4d1e" transparent opacity={0.45} depthWrite={false} />
+        <sphereGeometry args={[1, 24, 24]} />
+        <meshBasicMaterial color="#ff3d12" transparent opacity={0.5} depthWrite={false} blending={THREE.AdditiveBlending} />
       </mesh>
-      <mesh ref={second} position={[0.6, -1.2, 0.4]}>
-        <sphereGeometry args={[1, 16, 16]} />
-        <meshBasicMaterial color="#ffd28a" transparent opacity={0} depthWrite={false} />
+      <mesh ref={second} position={[1.1, -1.6, 0.6]}>
+        <sphereGeometry args={[1, 18, 18]} />
+        <meshBasicMaterial color="#ffd28a" transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} />
       </mesh>
+      <mesh ref={third} position={[-1.4, 0.8, -0.9]}>
+        <sphereGeometry args={[1, 18, 18]} />
+        <meshBasicMaterial color="#ff8a3d" transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} />
+      </mesh>
+      {/* shockwave */}
       <mesh ref={ring} rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.9, 1.1, 48]} />
-        <meshBasicMaterial color="#ffe9c4" transparent opacity={0.5} side={THREE.DoubleSide} depthWrite={false} />
+        <ringGeometry args={[0.9, 1.15, 64]} />
+        <meshBasicMaterial color="#ffe9c4" transparent opacity={0.55} side={THREE.DoubleSide} depthWrite={false} blending={THREE.AdditiveBlending} />
       </mesh>
-      <pointLight ref={light} color="#ffaa55" intensity={90} distance={160} decay={2} />
+      {/* rising fire column */}
+      <mesh ref={column} position={[0, -3, 0]}>
+        <coneGeometry args={[1.4, 4, 16, 1, true]} />
+        <meshBasicMaterial color="#ff7a1e" transparent opacity={0.7} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <pointLight ref={light} color="#ffaa55" intensity={140} distance={260} decay={2} />
+      {/* smoke */}
       <group ref={smoke}>
         {puffs.map((_, i) => (
           <mesh key={i}>
             <sphereGeometry args={[1, 10, 10]} />
-            <meshStandardMaterial color="#2b2b30" transparent opacity={0.55} depthWrite={false} />
+            <meshStandardMaterial color={i % 3 === 0 ? "#17171b" : "#2e2e34"} transparent opacity={0.6} depthWrite={false} />
           </mesh>
         ))}
       </group>
+      {/* sparks */}
+      <group ref={sparks}>
+        {streaks.map((k, i) => (
+          <mesh key={i} quaternion={k.quat}>
+            <boxGeometry args={[0.05, k.len, 0.05]} />
+            <meshBasicMaterial color={i % 4 === 0 ? "#ffffff" : "#ffcf6b"} transparent opacity={1} depthWrite={false} blending={THREE.AdditiveBlending} />
+          </mesh>
+        ))}
+      </group>
+      {/* recognisable fragments, each with its own flame trail */}
       <group ref={debris}>
         {chunks.map((k, i) => (
-          <mesh key={i}>
-            {k.kind === 0 ? <boxGeometry args={[0.5, 0.7, 0.06]} /> : k.kind === 1 ? <boxGeometry args={[0.05, 0.9, 0.6]} /> : <coneGeometry args={[0.3, 0.7, 8]} />}
-            <meshStandardMaterial color={k.kind === 1 ? "#e5484d" : "#cfd6e4"} emissive="#ff7733" emissiveIntensity={1.4} />
-          </mesh>
+          <group key={i}>
+            <mesh castShadow>
+              {k.kind === 0 ? (
+                <boxGeometry args={[0.7 * k.size, 0.9 * k.size, 0.07]} />
+              ) : k.kind === 1 ? (
+                <boxGeometry args={[0.06, 1.1 * k.size, 0.7 * k.size]} />
+              ) : k.kind === 2 ? (
+                <coneGeometry args={[0.35 * k.size, 0.9 * k.size, 10]} />
+              ) : k.kind === 3 ? (
+                <torusGeometry args={[0.5 * k.size, 0.09, 8, 14, Math.PI * 0.9]} />
+              ) : (
+                <cylinderGeometry args={[0.18 * k.size, 0.4 * k.size, 0.5 * k.size, 12, 1, true]} />
+              )}
+              <meshStandardMaterial
+                color={k.kind === 1 ? "#e5484d" : k.kind === 4 ? "#3c4048" : "#cfd6e4"}
+                metalness={0.6}
+                roughness={0.4}
+                emissive="#ff5a1e"
+                emissiveIntensity={k.burns ? 1.8 : 0.4}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+            <mesh quaternion={k.trailQuat} position={[0, 0, 0]}>
+              <coneGeometry args={[0.22 * k.size, 1.8 * k.size, 8, 1, true]} />
+              <meshBasicMaterial color="#ff9a2e" transparent opacity={0.9} depthWrite={false} blending={THREE.AdditiveBlending} />
+            </mesh>
+          </group>
         ))}
       </group>
     </group>
@@ -403,7 +525,7 @@ function LaunchDirector({
     }
     // Rule-of-thirds: bias the framing so the rocket rides the lower third
     // with sky ahead of it — lead increases as it speeds away.
-    camLook.current.y += Math.min(6 * S, (1.5 + y * 0.03) * S) * k;
+    camLook.current.y += Math.min(6 * S, 1.5 * S + y * 0.03) * k;
     // Never sink the camera below the pad apron.
     camPos.current.y = Math.max(1.2 * S, camPos.current.y);
     // Camera shake: strong at ignition, medium during burn, off in coast
@@ -458,7 +580,21 @@ export default function LaunchPage() {
   const site = SITE_BY_ID[profile?.launchSiteId ?? "canaveral"];
   const dest = DESTINATION_BY_ID[destinationId];
   const quality = tasksTotal > 0 ? tasksCorrect / tasksTotal : 1;
-  const liveFlight = useMemo(() => simulateFlight(design, quality), [design, quality]);
+  const liveFlight = useMemo(() => {
+    const f = simulateFlight(design, quality);
+    // Dev/preview flag: `?boom` forces a mid-air catastrophe so the explosion
+    // FX can be checked without mis-building a rocket. Cosmetic only.
+    if (typeof window !== "undefined" && (window.location.search.includes("boom") || window.location.hash.includes("boom"))) {
+      const ev = { t: 5, label: "TEST RANGE — DELIBERATE FIREBALL (dev preview)", severity: "catastrophic" as const };
+      const lastT = f.samples[f.samples.length - 1]?.t ?? 0;
+      const samples =
+        lastT > 8
+          ? f.samples
+          : (Array.from({ length: 25 }, (_, i) => ({ t: i * 0.5, altitude: 0.02 * (i * 0.5) ** 2, driftX: 0 })) as unknown as typeof f.samples);
+      return { ...f, samples, burnoutT: Math.max(f.burnoutT, 8), apogeeT: Math.max(f.apogeeT, 12), outcome: "lostVehicle" as const, failures: [ev], events: [ev] };
+    }
+    return f;
+  }, [design, quality]);
   // Freeze the flight once the countdown starts: refreshing the profile after
   // recording the mission must NOT re-simulate and rewrite the outcome shown.
   const frozenFlightRef = useRef<FlightResult | null>(null);
@@ -633,6 +769,11 @@ export default function LaunchPage() {
       <div className="absolute top-4 left-4 hud-panel px-4 py-2 text-sm z-10">
         🚀 Mission to {dest?.emoji} {dest?.name} — lifting off from {site.name}
       </div>
+      {phase === "ready" && (
+        <div className="absolute bottom-6 left-4 z-10">
+          <TimeOfDaySlider />
+        </div>
+      )}
       <div className="absolute top-4 right-4 flex gap-2 z-10">
         {phase === "flight" && (
           <button

@@ -8,6 +8,7 @@ import { SITE_BY_ID } from "../../mission/launchSites";
 import { PATCH_BY_ID } from "../../mission/patches";
 import SitePicker from "./SitePicker";
 import ViewSwitcher, { type ViewSwitcherHandle } from "../../components/ViewSwitcher";
+import TimeOfDaySlider from "../../components/TimeOfDaySlider";
 
 export default function HangarPage() {
   const navigate = useNavigate();
@@ -158,6 +159,11 @@ export default function HangarPage() {
           <img src={photoOverlay} alt="Mission photo" className="w-full h-full object-cover" />
         </div>
       )}
+
+      {/* Time of day */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30">
+        <TimeOfDaySlider />
+      </div>
 
       {/* Mission camera pill */}
       <div className="absolute bottom-4 right-4 z-30">

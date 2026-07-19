@@ -6,6 +6,7 @@ import { ACESFilmicToneMapping } from "three";
 import type { LaunchSite } from "../mission/launchSites";
 import { TERRAIN_COLORS } from "../mission/launchSites";
 import { GeoEnvironment, HAS_MAPS_KEY } from "./GeoEnvironment";
+import { useTimeOfDay } from "../mission/useTimeOfDay";
 
 /** Uniform scale-up of the rocket + pad so the vehicle reads at real launcher
  *  size against the real-world 3D Tiles terrain (trees are 15–25 m; a 10 m
@@ -204,6 +205,9 @@ export default function RocketScene({
   const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const controlsRef = useRef<any>(null);
   const geoActive = geo && HAS_MAPS_KEY && Boolean(site);
+  // Global time-of-day (HUD slider) unless a page pins a specific hour.
+  const globalHour = useTimeOfDay((s) => s.hour);
+  const hour = solarHour ?? globalHour;
   return (
     <Canvas
       shadows
@@ -217,7 +221,7 @@ export default function RocketScene({
     >
       {geoActive && site ? (
         <Suspense fallback={null}>
-          <GeoEnvironment site={site} solarHour={solarHour} clouds={!reducedMotion}>
+          <GeoEnvironment site={site} solarHour={hour} clouds={!reducedMotion}>
             <group scale={VEHICLE_SCALE}>
               {showPad && <Launchpad site={site} towerRetracted={towerRetracted} ground={false} />}
               {children}

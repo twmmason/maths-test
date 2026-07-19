@@ -234,6 +234,10 @@ export function GeoEnvironment({
 }: GeoEnvironmentProps) {
   const atmosphereRef = useRef<AtmosphereApi>(null);
   const sunDate = useMemo(() => dateFromSolarHour(solarHour, site.lon), [solarHour, site.lon]);
+  // 0 at night → 1 at solar noon: scales every non-physical fill light so
+  // buildings actually go dark after sunset (the takram sun/sky handle the
+  // physically-lit part; these constants otherwise keep tiles lit at 2am).
+  const day = Math.max(0, Math.sin((Math.PI * (solarHour - 6)) / 12));
   const ecefMatrix = useMemo(() => {
     const position = new Geodetic(radians(site.lon), radians(site.lat), 0).toECEF(
       new THREE.Vector3(),
@@ -260,26 +264,28 @@ export function GeoEnvironment({
       <Sky />
       <AtmosphereStars data="/atmosphere/stars.bin" />
       <SkyLight intensity={2} />
-      {/* fill so shadowed faces don't collapse to black at rocket scale */}
-      <hemisphereLight args={["#bcd3ee", "#8a7d68", 0.45]} />
-      <ambientLight intensity={0.12} color="#dfe6f0" />
+      {/* fill so shadowed faces don't collapse to black at rocket scale —
+          kept low so sun shadows on the tiles stay visible, and scaled by
+          sun elevation so night is actually dark */}
+      <hemisphereLight args={["#bcd3ee", "#8a7d68"]} intensity={0.04 + 0.26 * day} />
+      <ambientLight intensity={0.015 + 0.065 * day} color="#dfe6f0" />
       <SunLight
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[4096, 4096]}
         shadow-camera-near={1}
-        shadow-camera-far={1200}
-        shadow-camera-left={-120}
-        shadow-camera-right={120}
-        shadow-camera-top={220}
-        shadow-camera-bottom={-120}
+        shadow-camera-far={4800}
+        shadow-camera-left={-500}
+        shadow-camera-right={500}
+        shadow-camera-top={900}
+        shadow-camera-bottom={-500}
         shadow-bias={-0.0002}
-        shadow-normalBias={0.8}
+        shadow-normalBias={1.5}
       />
       <SiteTiles site={site} />
       {children}
       {/* Neutral env probe for rocket reflections (city = grey/blue — no
           green-foliage tint on metallic parts) */}
-      <Environment preset="city" background={false} environmentIntensity={0.45} />
+      <Environment preset="city" background={false} environmentIntensity={0.04 + 0.41 * day} />
       <EffectComposer multisampling={0} enableNormalPass>
         {clouds ? (
           <Clouds qualityPreset="low" coverage={0.34} localWeatherVelocity={[0.00005, 0]}>

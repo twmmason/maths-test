@@ -28,11 +28,11 @@ const SHARED_VOICE = "Charon";
  * Voice registry — all roles use the same prebuilt Gemini voice; only the
  * natural-language delivery directive differs per role.
  */
-const DEEP_STYLE = "Say in a deep, low, unhurried voice — a gravelly veteran mission-control announcer";
+const DEEP_STYLE = "Say in a deep, low male voice at a brisk, energetic mission-control pace";
 const VOICE_FOR_ROLE: Record<VoiceRole, { voiceName: string; style: string; rate: number }> = {
-  flightDirector: { voiceName: SHARED_VOICE, style: DEEP_STYLE, rate: 0.95 },
-  rso: { voiceName: SHARED_VOICE, style: DEEP_STYLE, rate: 0.95 },
-  commander: { voiceName: SHARED_VOICE, style: DEEP_STYLE, rate: 0.95 },
+  flightDirector: { voiceName: SHARED_VOICE, style: DEEP_STYLE, rate: 1.05 },
+  rso: { voiceName: SHARED_VOICE, style: DEEP_STYLE, rate: 1.05 },
+  commander: { voiceName: SHARED_VOICE, style: DEEP_STYLE, rate: 1.05 },
 };
 
 /** Strip characters that read badly aloud (scios `_sanitize_for_tts`). */
@@ -149,13 +149,16 @@ export function unlockVoice() {
 export async function speak(text: string, role: VoiceRole = "flightDirector"): Promise<void> {
   try {
     const key = clipKey(text, VOICE_FOR_ROLE[role].voiceName);
-    let clip = await vdb.clips.get(key);
+    const clip = await vdb.clips.get(key);
     if (!clip) {
-      const wav = await synthesise(text, role);
-      if (wav) {
-        clip = { key, mp3: wav, createdAt: Date.now() };
-        await vdb.clips.put(clip);
-      }
+      // Latency rule: NEVER wait seconds for the TTS API mid-launch. Speak
+      // instantly with the browser voice and cache the Gemini clip in the
+      // background so the next playback is the good one.
+      speakFallback(text, role);
+      void synthesise(text, role).then((wav) => {
+        if (wav) return vdb.clips.put({ key, mp3: wav, createdAt: Date.now() });
+      });
+      return;
     }
     if (clip) {
       const url = URL.createObjectURL(clip.mp3);
