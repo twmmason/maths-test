@@ -1,11 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 const primary = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
-const pool = ((import.meta.env.VITE_GEMINI_API_KEY_POOL as string | undefined) ?? "")
-  .split(",")
-  .map((k) => k.trim())
-  .filter(Boolean);
-const keys = [primary, ...pool].filter((k): k is string => !!k && k !== "your-gemini-api-key");
+const keys = [primary].filter((k): k is string => !!k && k !== "your-gemini-api-key");
 
 let keyIndex = 0;
 let warned = false;
@@ -29,7 +25,7 @@ export function getClient(): GoogleGenAI | null {
   return new GoogleGenAI({ apiKey: keys[keyIndex] });
 }
 
-/** Rotate to the next pooled key after a 429/quota error. */
+/** Rotate to the next key after a 429/quota error (no-op with a single key). */
 export function rotateKey(): void {
   keyIndex = (keyIndex + 1) % Math.max(keys.length, 1);
 }
