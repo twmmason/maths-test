@@ -25,8 +25,17 @@ The golden rules from `PROMPT.md` §10–11 still apply word-for-word:
   a labelled worksheet sum.
 - Briefings NEVER contain the symbols + − × ÷ = (algebra tasks show equations
   inside the WIDGET, never in the briefing prose — see §5 rule below).
-- Deterministic core: Gemini remains a language layer only.
+- Deterministic core for maths: task generation, answer checking, mastery and
+  physics never depend on the LLM. But Gemini IS a first-class part of the
+  experience layer — use it wherever it helps (see §6).
 - Gentle tone, UK conventions, answers change the 3D scene.
+
+**Network-first**: this app runs on a connected machine with working API keys
+in `.env.local` (`VITE_GEMINI_API_KEY` + pool, `VITE_GOOGLE_MAPS_API_KEY`).
+Use Gemini and Google Maps/3D Tiles **wherever possible and helpful** — they
+are the intended experience, not an optional extra. Static fallbacks exist
+only as graceful degradation if a call fails mid-session; never design a
+feature down to avoid the network.
 
 ---
 
@@ -204,11 +213,52 @@ skill. Update the template test + coverage-check to enforce: briefings clean,
 
 ---
 
-## 6. What must NOT change
+## 6. Network & AI features (REQUIRED — use Gemini and Maps wherever helpful)
 
+The keys in `.env.local` work. This expansion must actively USE them:
+
+### 6a. Real terrain, sky and clouds at the launch site (takram + Google 3D Tiles)
+The Phase 7 deferral in `PROGRESS.md` is now cancelled — implement it properly:
+- Stream **Google Photorealistic 3D Tiles** (via `3d-tiles-renderer` + the
+  `@takram/three-geospatial` plugins, following Gaudi's
+  `GeospatialEnvironment.tsx`) using `VITE_GOOGLE_MAPS_API_KEY`, positioned at
+  the **exact lat/lon of the chosen launch site** from `launchSites.ts` — the
+  commander should recognise the real coastline at Cape Canaveral or the real
+  Shetland cliffs at SaxaVord from the pad.
+- Add `@takram/three-atmosphere` (physically-based sky, sun, stars, aerial
+  perspective) and `@takram/three-clouds` (volumetric cloud layer) so the
+  launch sequence shows the real sky→space transition: golden hour on the
+  pad → sky darkening → clouds falling away below → stars.
+- If the takram packages genuinely cannot coexist with the pinned R3F v8
+  stack, upgrade the three/R3F stack as needed to make them work (this is a
+  sanctioned breaking upgrade — keep `pnpm verify` green afterwards). Only if
+  that is impossible after a real attempt may the drei fallback remain, and
+  the blocker must be documented in PROGRESS.md with the exact version
+  conflict.
+- Tiles/atmosphere failures at runtime degrade gracefully to the current
+  stylised terrain — but degradation is an error path, not the default.
+
+### 6b. Gemini everywhere it helps (using the §5a `PROMPT.md` client + key pool)
+- **Adaptive hints, briefing paraphrase, debrief, Chief Engineer** all extend
+  to the KS3 content — same validation guardrails (no answer leaks; the §4
+  equation-display rule applies to LLM output too).
+- **Academy tutor moments**: for KS3 concepts (e.g. "what IS a gradient?"),
+  the Chief Engineer should give richer, slightly older-pitched explanations —
+  update the persona prompt to address a Year 7–9 commander when the task is
+  a KS3 criterion.
+- **Telemetry insights**: on the Telemetry Science Deck, after the
+  deterministic stats are computed, ask Gemini to narrate one interesting
+  pattern in the commander's own flight data ("your altitude jumped once you
+  started using the Needle Cone…").
+- **Mission Camera / posters / milestone flavour** work for all new Academy
+  destinations, with destination-appropriate imagery prompts (Jupiter's
+  moons, Saturn's rings…).
+
+### What must NOT change
 - All 81 KS2 criteria, templates and tests keep passing untouched.
 - Multi-profile system (each commander keeps an independent KS2+KS3 record).
-- The offline-first rule: every new feature works with no API key/network.
+- The deterministic maths core (generation/checking/mastery/physics) stays
+  LLM-free so `pnpm verify` runs headless without keys.
 - `run.sh` boot, port 3003, `pnpm verify` as the single green/red command.
 
 ---
@@ -218,7 +268,9 @@ skill. Update the template test + coverage-check to enforce: briefings clean,
 1. Update `PROGRESS.md` with a new "KS3 Expansion" phase plan (Phase 8:
    curriculum data + coverage tooling; Phase 9: widgets; Phase 10: templates
    per domain; Phase 11: Academy progression + destinations; Phase 12:
-   telemetry-statistics integration + polish). Tick items only when verified.
+   takram atmosphere/clouds + Google 3D Tiles terrain at the launch site
+   (§6a); Phase 13: Gemini integrations (§6b) + telemetry-statistics + polish).
+   Tick items only when verified.
 2. Vitest tests for every new template (all tiers, answer consistency,
    briefing symbol rule) and every new widget's pure logic; extend
    `scripts/coverage-check.ts` to the full enlarged criteria list.
@@ -227,5 +279,8 @@ skill. Update the template test + coverage-check to enforce: briefings clean,
    `/dev/status` shows every KS2+KS3 criterion green, and a browser
    walkthrough (dated in PROGRESS.md) shows: a 60%-mastery profile unlocking
    the Academy, certifying one part per new domain (Number, Algebra, Ratio,
-   Geometry, Probability, Statistics) through the new widgets, and flying an
-   Academy destination whose report references the KS3 maths used.
+   Geometry, Probability, Statistics) through the new widgets, flying an
+   Academy destination whose report references the KS3 maths used, **real 3D
+   Tiles terrain + takram sky visible at the chosen launch site**, and a
+   live Gemini hint/debrief/telemetry-insight observed working with the real
+   keys.
