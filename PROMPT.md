@@ -238,10 +238,10 @@ as each system goes green.
 - **Zustand** for app/rocket state (simple, works inside and outside the Canvas)
 - **react-router-dom** for page routing
 - **Dexie.js** (IndexedDB) for local-first storage — no backend
-- **@google/genai** (Gemini API, model `gemini-3-flash-preview`) for the AI
-  Flight Director language layer (see §5a) — API key read from
-  `VITE_GEMINI_API_KEY` in `.env.local`; the app must remain fully playable
-  without a key or network
+- **@google/genai** (Gemini API) — text model `gemini-3-flash-preview` for the
+  AI Flight Director (§5a) and image models for the Mission Camera (§5b).
+  Keys read from `.env.local` (`VITE_GEMINI_API_KEY` + pool); the app must
+  remain fully playable without a key or network
 - **Vitest** for unit tests (task templates + physics — see §9)
 - **pnpm** package manager
 - Start with `./run.sh` — note: it runs `tsc -b` before starting the dev server,
@@ -443,7 +443,7 @@ interface Profile {
   launchStreak: number;     // consecutive days with ≥1 launch
   lastPlayedAt: number;
   rocketDesign: RocketDesign;      // persisted rocket (rule: "the rocket is continuous")
-  launchSiteId: string;            // chosen real-world spaceport (§5b)
+  launchSiteId: string;            // chosen real-world spaceport (§5b), seed "canaveral"
   partLevels: Record<RocketPart, 1 | 2 | 3>;
   patches: string[];               // earned mission patch ids
 }
@@ -461,6 +461,7 @@ interface Attempt {
 interface MissionRecord {
   id?: number;
   destinationId: string;
+  launchSiteId?: string;    // spaceport the mission launched from (§5b)
   tasksCorrect: number;
   tasksTotal: number;
   maxAltitudeKm: number;
@@ -767,7 +768,8 @@ Keep one shared system prompt in `src/ai/flightDirector.ts`:
 ### Engineering guardrails
 
 - **Deterministic core**: task generation, answer checking, mastery, and
-  physics never call the LLM. All §9 unit tests must pass with `ai === null`.
+  physics never call the LLM. All §9 unit tests must pass with no API key set
+  (`getClient()` returning `null`).
 - **Validate every output** before showing it (answer-leak check, operation-
   symbol check, length cap). Failed validation → static fallback, silently.
 - **Fail soft & fast**: ~4s timeout; the answering flow must never block on
@@ -1012,7 +1014,8 @@ Write **Vitest unit tests as you go** for the pure logic (no 3D):
   Δv, and altitude ranges
 - `mastery.ts`: mastery/streak/spaced-repetition logic
 - `ai/` validators: answer-leak and operation-symbol checks on LLM output;
-  every AI feature degrades cleanly to its static fallback when `ai === null`
+  every AI feature degrades cleanly to its static fallback when `getClient()`
+  returns `null`
 
 ### Phase 1: Foundation
 - [ ] Vite + React 18 + TS + Tailwind project setup
@@ -1206,7 +1209,8 @@ When generating a task from a template, the code must:
 - No text-to-speech or voice input
 - No PDF/print worksheets
 - No timer pressure (optional speed bonus on checklist only)
-- No external dependencies beyond the listed stack
+- No external dependencies beyond the listed stack (§4) and the 3D/terrain
+  packages specified in §14
 
 ---
 
@@ -1216,8 +1220,13 @@ When generating a task from a template, the code must:
 - **DfE Ready-to-Progress criteria**: The 81 criteria listed in section 6
 - **Maths guidance Year 6**: available at `docs/Maths_guidance_year_6.pdf`
 - **Original brief**: `docs/BRIEF.md`
-- The repo currently contains only docs and `run.sh` — build everything from
-  scratch with the 3D-first, engineering-task-first approach described above.
+- **API keys**: `.env.local` at the repo root already contains working values
+  for `VITE_GEMINI_API_KEY`, `VITE_GEMINI_API_KEY_POOL`, and
+  `VITE_GOOGLE_MAPS_API_KEY` (`.env.example` documents the shape; both are
+  covered by `.gitignore`)
+- The repo currently contains only docs, `run.sh`, and the env files — build
+  everything from scratch with the 3D-first, engineering-task-first approach
+  described above.
 
 ---
 
@@ -1398,15 +1407,20 @@ For the post-flight report, capture a screenshot of the launched rocket:
 
 When complete, a 10-year-old should be able to:
 
-1. Open the app and see his 3D rocket on the launch pad
+1. Open the app, pick a real launch site (e.g. SaxaVord in Shetland), and see
+   his 3D rocket on the pad there
 2. Pick "Low Orbit" as a destination
 3. Enter the VAB, drag parts from the catalogue onto the rocket in any order
    he likes, and certify each one by solving its engineering tasks
 4. See his rocket change shape as he assembles and answers
 5. Complete the pre-flight checklist
 6. Watch his rocket launch in a 3D animated sequence
-7. See an after-action report of what maths he used
-8. Come back tomorrow, and his rocket is upgraded from what he mastered
+7. See an after-action report of what maths he used, narrated personally by
+   the Flight Director
+8. Get stuck on a task, type a wrong answer, and receive a hint that clearly
+   responds to the mistake he actually made — without giving the answer away
+9. Snap an AI "mission photo" of his rocket for the Flight Log scrapbook
+10. Come back tomorrow, and his rocket is upgraded from what he mastered
 
 And at no point should he think "I'm doing maths homework." He should think
 "I'm building a rocket, and I need to figure out the right angle/measurement/
