@@ -6,11 +6,18 @@ export interface LaunchSite {
   lon: number;
   /** WGS84 ellipsoidal height (geoid + terrain) for 3D Tiles placement. */
   ellipsoidHeight: number;
+  /** Extra vertical offset (metres) to align the pad with the 3D Tiles ground.
+   *  Negative = push pad down (tiles ground is lower than the nominal height). */
+  padOffsetY?: number;
   description: string;
   terrain: "coastal" | "steppe" | "jungle" | "island";
 }
 
 export const LAUNCH_SITES: LaunchSite[] = [
+  // ellipsoidHeight: WGS84 height that places the scene origin at ground level.
+  // Floating pad → height too HIGH (terrain below origin) → decrease it.
+  // Underground pad → height too LOW (terrain above origin) → increase it.
+  // padOffsetY is unused now (kept for future fine-tuning).
   { id: "canaveral", name: "Cape Canaveral", country: "🇺🇸 USA", lat: 28.3922, lon: -80.6077, ellipsoidHeight: -24, terrain: "coastal", description: "Where the Moon missions launched" },
   { id: "starbase", name: "Starbase, Texas", country: "🇺🇸 USA", lat: 25.9972, lon: -97.156, ellipsoidHeight: -23, terrain: "coastal", description: "Home of the biggest rocket ever built" },
   { id: "baikonur", name: "Baikonur Cosmodrome", country: "🇰🇿 Kazakhstan", lat: 45.9646, lon: 63.3052, ellipsoidHeight: 106, terrain: "steppe", description: "The world's first and busiest spaceport" },

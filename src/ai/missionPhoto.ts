@@ -1,5 +1,23 @@
 import { getClient, rotateKey, isRateLimit, withTimeout, IMAGE_MODEL_FAST, IMAGE_MODEL_QUALITY } from "./gemini";
 
+/** Rich scene context so the AI prompt matches what the camera actually sees. */
+export interface SceneInfo {
+  /** What phase the rocket is in. */
+  context: "pad" | "in-flight" | "orbit";
+  /** Current altitude in km (0 on the pad). */
+  altitudeKm: number;
+  /** Camera shot description (e.g. "low wide shot from 50 m away", "chase cam alongside"). */
+  cameraDesc: string;
+  /** Rocket height in metres. */
+  rocketHeightM: number;
+  /** Site full name + country. */
+  siteLabel: string;
+  /** Geographic description for the location. */
+  locationDesc: string;
+  /** Time of day hint. */
+  timeOfDay: string;
+}
+
 export type RenderStyle = "photorealistic" | "night-launch" | "watercolor" | "concept-art" | "toy-model";
 
 export const RENDER_STYLES: { id: RenderStyle; label: string }[] = [
@@ -44,6 +62,8 @@ export async function generateMissionPhoto(
   /** Hint about the scene context (e.g. "in-flight", "orbit"). When omitted
    *  the prompt defaults to a ground-level pad shot. */
   sceneContext?: "pad" | "in-flight" | "orbit",
+  /** Rich scene descriptor for better AI prompts. */
+  sceneInfo?: SceneInfo,
 ): Promise<string | null> {
   const client = getClient();
   if (!client) return null;
@@ -53,27 +73,66 @@ export async function generateMissionPhoto(
   const base64 = resized.split(",")[1];
   if (!base64) return null;
 
-  const ctx = sceneContext ?? "pad";
+  const ctx = sceneInfo?.context ?? sceneContext ?? "pad";
+  const si = sceneInfo;
+
+  // Location-aware terrain descriptions
   const terrainHint: Record<string, string> = {
-    coastal: "on a concrete pad near the ocean coast, with sea and shoreline visible in the background",
-    steppe: "on a vast flat steppe plain, brown grasslands stretching to the horizon",
-    jungle: "surrounded by dense tropical jungle, lush green canopy in the background",
-    island: "on a small coastal island, green cliffs and sea visible around the pad",
+    coastal: "on a concrete launch pad near the ocean coast, sea and shoreline in the background, flat scrubland around the pad",
+    steppe: "on a concrete launch pad in the middle of a vast flat steppe plain, brown grasslands stretching to the horizon under an enormous sky",
+    jungle: "on a concrete launch pad surrounded by dense tropical jungle, lush green canopy visible around the clearing",
+    island: "on a concrete launch pad on a coastal island, green cliffs and sea visible, the pad sits on flat ground near the shore",
   };
-  const bgHint =
-    ctx === "orbit"
-      ? "coasting in orbit high above the Earth, with the curved horizon and black space visible"
-      : ctx === "in-flight"
-        ? `climbing through the sky above ${siteName}, with engine exhaust trailing below it and the ground far beneath`
-        : terrainHint[terrain ?? "coastal"] ?? "on a launch pad";
-  const prompt = [
-    `Repaint this 3D render as a ${style.replace("-", " ")} photograph of a child's rocket ${bgHint}.`,
-    "CRITICAL: Keep the rocket's exact shape, proportions, parts and colours — only repaint the rendering style.",
-    "CRITICAL: Keep the background, sky and surroundings exactly as shown in the original screenshot — do NOT add a launch pad or ground unless they are already visible.",
-    ctx !== "pad"
-      ? "The rocket is IN FLIGHT — do NOT place it on a pad or podium."
-      : "The rocket should look like a real physical object sitting in the real location shown.",
-  ].join(" ");
+
+  // Build a rich, grounded prompt
+  const parts: string[] = [];
+
+  // Style + subject
+  parts.push(`Repaint this 3D screenshot as a ${style.replace("-", " ")} image.`);
+
+  // Rocket description
+  const rocketH = si?.rocketHeightM ?? 10;
+  parts.push(`The subject is a rocket approximately ${Math.round(rocketH)} metres tall.`);
+
+  // Scene context
+  if (ctx === "orbit") {
+    const alt = si?.altitudeKm ?? 400;
+    parts.push(`The rocket is coasting in orbit at ${alt.toLocaleString("en-GB")} km altitude. The Earth's curved horizon and the blackness of space are visible. There is no launch pad — the rocket is floating in microgravity.`);
+  } else if (ctx === "in-flight") {
+    const alt = si?.altitudeKm ?? 5;
+    if (alt > 80) {
+      parts.push(`The rocket is high in the upper atmosphere at ${Math.round(alt)} km, the sky is nearly black, the ground is far below as a hazy surface. Engine exhaust trails behind. There is no pad visible.`);
+    } else if (alt > 10) {
+      parts.push(`The rocket is climbing through the atmosphere at about ${Math.round(alt)} km altitude above ${si?.siteLabel ?? siteName}. Clouds may be nearby or below. The ground is distant. Engine exhaust streams behind the rocket.`);
+    } else {
+      parts.push(`The rocket has just lifted off and is a few hundred metres above the pad at ${si?.siteLabel ?? siteName}. Exhaust and smoke billow below it. The launch pad and surrounding terrain are still visible below.`);
+    }
+  } else {
+    // On the pad
+    const loc = si?.locationDesc ?? terrainHint[terrain ?? "coastal"] ?? "on a launch pad";
+    parts.push(`The rocket is standing vertically ${loc} at ${si?.siteLabel ?? siteName}. A service tower/gantry stands beside it. The rocket's base sits ON THE GROUND on the concrete pad — the pad must be at ground level, not floating.`);
+  }
+
+  // Camera/framing
+  if (si?.cameraDesc) {
+    parts.push(`The camera angle is: ${si.cameraDesc}.`);
+  }
+
+  // Time of day
+  if (si?.timeOfDay) {
+    parts.push(`The lighting is ${si.timeOfDay}.`);
+  }
+
+  // Hard rules
+  parts.push("CRITICAL: Keep the rocket's exact shape, proportions, fins, nose cone and colours from the screenshot — only change the rendering style.");
+  parts.push("CRITICAL: Match the camera angle, framing and composition exactly as shown in the screenshot.");
+  if (ctx !== "pad") {
+    parts.push("The rocket is IN FLIGHT — do NOT place it on a pad, pedestal, or podium. Do NOT add ground underneath it.");
+  } else {
+    parts.push("The launch pad and rocket must be sitting ON the ground at ground level — NOT floating in the air. The pad is a flat concrete surface flush with the terrain.");
+  }
+
+  const prompt = parts.join(" ");
 
   const call = async () => {
     const res = await client.models.generateContent({

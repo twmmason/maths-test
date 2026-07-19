@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Environment, OrbitControls, Stars } from "@react-three/drei";
-import { Suspense, useRef, type ReactNode, type MutableRefObject } from "react";
+import { Suspense, useRef, useState, type ReactNode, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { ACESFilmicToneMapping } from "three";
 import type { LaunchSite } from "../mission/launchSites";

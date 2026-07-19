@@ -16,6 +16,8 @@ import MissionCamera from "../../components/MissionCamera";
 import { useEffect as useEffectOnce } from "react";
 import type { FlightResult } from "../../physics/types";
 import type { RocketDesign } from "../../three/rocketDesign";
+import type { SceneInfo } from "../../ai/missionPhoto";
+import { useTimeOfDay } from "../../mission/useTimeOfDay";
 
 import type { RocketPart } from "../../curriculum/types";
 
@@ -574,6 +576,43 @@ export default function LaunchPage() {
   // Show the true 3D orbit view only when an orbital altitude was genuinely reached.
   const orbitView = phase === "done" && reached && flight.outcome !== "lostVehicle" && (dest?.requiredAltitudeKm ?? 0) >= 180;
 
+  // Time of day for the photo prompt
+  const globalHour = useTimeOfDay((s) => s.hour);
+  const todLabel = globalHour < 6 ? "pre-dawn, dark sky with stars" : globalHour < 8 ? "early morning golden hour, low warm sun" : globalHour < 11 ? "mid-morning, bright daylight" : globalHour < 14 ? "midday, overhead sun, hard shadows" : globalHour < 17 ? "afternoon, warm light" : globalHour < 19 ? "golden hour sunset, long shadows, orange sky" : globalHour < 20.5 ? "dusk, deep blue-orange sky" : "night, dark sky with stars and moonlight";
+
+  // Rocket height from the design
+  const rocketHeightM = (design.hullHeight + design.noseHeight + 1.5) * VEHICLE_SCALE;
+
+  // Camera description based on current shot
+  const cameraDescForShot = (alt: number): string => {
+    if (orbitView) return "wide orbital shot, camera circling the rocket with Earth's horizon below";
+    if (shotOverride === FREE_CAM || (phase !== "flight" && phase !== "countdown")) return "free camera, user-positioned angle";
+    if (alt < 0.5) return `low wide-angle shot from about ${Math.round(60 * VEHICLE_SCALE)} metres away, looking up at the rocket on its pad`;
+    if (alt < 2) return "tower camera, close shot from beside the gantry looking along the rocket as it clears the tower";
+    if (alt < 15) return "ground-based telephoto tracking camera, rocket small against the sky, zoomed in from far away";
+    if (alt < 80) return "chase camera flying alongside the rocket through the cloud layer, close-up";
+    return "high-altitude camera, rocket tiny against darkening sky, nearly in space";
+  };
+
+  // Location description
+  const locationDescs: Record<string, string> = {
+    coastal: `on a concrete launch pad near the Atlantic ocean coast at ${site.name}, flat scrubland and palmetto around the pad, sea visible in the distance`,
+    steppe: `on a concrete launch pad in the vast Kazakh steppe at ${site.name}, flat brown grasslands stretching to every horizon`,
+    jungle: `on a concrete launch pad cut into dense tropical rainforest at ${site.name} in French Guiana, lush green jungle canopy all around`,
+    island: `on a concrete launch pad on a small ${site.name === "SaxaVord, Shetland" ? "Scottish island in the North Sea, green windswept hills" : "Japanese coastal island, green cliffs and Pacific ocean"} at ${site.name}`,
+  };
+
+  const sceneContext: "pad" | "in-flight" | "orbit" = orbitView ? "orbit" : phase === "flight" || phase === "done" ? "in-flight" : "pad";
+  const sceneInfo: SceneInfo = {
+    context: sceneContext,
+    altitudeKm: altReadout,
+    cameraDesc: cameraDescForShot(altReadout),
+    rocketHeightM,
+    siteLabel: `${site.name}, ${site.country.replace(/^[^\s]+\s/, "")}`,
+    locationDesc: locationDescs[site.terrain] ?? `on a concrete launch pad at ${site.name}`,
+    timeOfDay: todLabel,
+  };
+
   // Any drag/scroll on the scene hands the camera to the user — even mid-launch.
   // The free cam keeps tracking the rocket, but rotation & zoom are all theirs.
   const takeCamera = () => {
@@ -621,7 +660,8 @@ export default function LaunchPage() {
         getCanvas={() => canvasRef.current}
         siteName={site.name}
         siteTerrain={site.terrain}
-        sceneContext={orbitView ? "orbit" : phase === "flight" || phase === "done" ? "in-flight" : "pad"}
+        sceneContext={sceneContext}
+        sceneInfo={sceneInfo}
         pillClassName="absolute bottom-20 right-4 z-30"
         onPhotoModeChange={(active) => {
           setPhotoPaused(active);

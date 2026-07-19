@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ViewSwitcher, { type ViewSwitcherHandle } from "./ViewSwitcher";
+import type { SceneInfo } from "../ai/missionPhoto";
 
 /**
  * Mission Camera — drop-in wrapper for any 3D view. Renders the
@@ -16,6 +17,7 @@ export default function MissionCamera({
   siteName,
   siteTerrain,
   sceneContext,
+  sceneInfo,
   onPhotoModeChange,
   pillClassName = "absolute bottom-4 right-4 z-30",
 }: {
@@ -24,6 +26,8 @@ export default function MissionCamera({
   siteTerrain?: string;
   /** Scene context hint for the AI photo prompt ("pad" | "in-flight" | "orbit"). */
   sceneContext?: "pad" | "in-flight" | "orbit";
+  /** Rich scene descriptor for better AI prompts. */
+  sceneInfo?: SceneInfo;
   onPhotoModeChange?: (active: boolean) => void;
   pillClassName?: string;
 }) {
@@ -94,6 +98,7 @@ export default function MissionCamera({
           siteName={siteName}
           siteTerrain={siteTerrain}
           sceneContext={sceneContext}
+          sceneInfo={sceneInfo}
           onModeChange={(m) => {
             const active = m !== "cad";
             setPhotoMode(active);
