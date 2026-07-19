@@ -1,5 +1,7 @@
-# Build and publish Rocket Lab to GitHub Pages on every push to main.
-# API keys are optional repo secrets — without them the app runs in its
+# Build Rocket Lab and publish the dist to the gh-pages branch on every push
+# to main. GitHub auto-serves the gh-pages branch of a public repo at
+# https://twmmason.github.io/maths-test/ — no manual Pages setup needed.
+# API keys are optional repo secrets; without them the app runs in its
 # offline/fallback mode (static hints, stylised terrain), fully playable.
 name: Deploy to GitHub Pages
 
@@ -9,16 +11,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,19 +35,7 @@ jobs:
           VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
           VITE_GEMINI_API_KEY_POOL: ${{ secrets.VITE_GEMINI_API_KEY_POOL }}
           VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_API_KEY }}
-      - uses: actions/configure-pages@v5
+      - uses: peaceiris/actions-gh-pages@v4
         with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
