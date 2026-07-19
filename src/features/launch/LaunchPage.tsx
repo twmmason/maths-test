@@ -77,8 +77,6 @@ function FlyingRocket({
     setFlame(flameTarget);
   });
 
-  // Smoke cloud: expanding spheres that linger at the pad after ignition
-  const smokeT = playing ? clockRef.current.t : 0;
 
   return (
     <>
@@ -91,37 +89,7 @@ function FlyingRocket({
           partLevels={partLevels}
         />
       </group>
-      {/* Pad exhaust smoke cloud — stays at y=0, expands and fades */}
-      {playing && smokeT < 12 && (
-        <group>
-          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-            const age = Math.max(0, smokeT - i * 0.3);
-            if (age <= 0) return null;
-            const r = 1.5 + age * 2.5;
-            const opacity = Math.max(0, 0.45 - age * 0.04);
-            const a = (i / 8) * Math.PI * 2;
-            const drift = age * 0.8;
-            return (
-              <mesh
-                key={i}
-                position={[
-                  Math.cos(a) * (2 + drift),
-                  0.5 + Math.sin(i * 2.3) * 0.4 + age * 0.3,
-                  Math.sin(a) * (2 + drift),
-                ]}
-              >
-                <sphereGeometry args={[r, 8, 8]} />
-                <meshStandardMaterial
-                  color="#d4cdc4"
-                  transparent
-                  opacity={opacity}
-                  depthWrite={false}
-                />
-              </mesh>
-            );
-          })}
-        </group>
-      )}
+
     </>
   );
 }
@@ -328,6 +296,7 @@ export default function LaunchPage() {
           towerRetracted={phase !== "ready"}
           cameraDistance={16}
           controlsEnabled={phase !== "flight"}
+          exhaustSmoke={phase === "flight" || phase === "countdown"}
           onCanvasReady={(c) => (canvasRef.current = c)}
         >
           <FlyingRocket

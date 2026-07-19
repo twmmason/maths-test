@@ -26,16 +26,16 @@ export function Launchpad({ site, towerRetracted = false, ground = true }: { sit
         </mesh>
       )}
       {/* Concrete pad + blast deflector */}
-      <mesh position={[0, -0.45, 0]} receiveShadow>
+      <mesh position={[0, -0.75, 0]} receiveShadow>
         <cylinderGeometry args={[6, 6.5, 0.3, 32]} />
         <meshStandardMaterial color="#7d8497" roughness={0.9} />
       </mesh>
-      <mesh position={[0, -0.32, 0]} receiveShadow>
+      <mesh position={[0, -0.62, 0]} receiveShadow>
         <cylinderGeometry args={[2.2, 2.5, 0.25, 24]} />
         <meshStandardMaterial color="#4a5066" roughness={0.8} metalness={0.2} />
       </mesh>
       {/* Service tower — industrial lattice with cross-bracing */}
-      <group ref={towerRef} position={[3.8, -0.3, 0]}>
+      <group ref={towerRef} position={[3.8, -0.6, 0]}>
         {/* Four corner columns */}
         {[[-0.4, -0.4], [-0.4, 0.4], [0.4, -0.4], [0.4, 0.4]].map(([x, z], i) => (
           <mesh key={`col${i}`} position={[x, 5.5, z]} castShadow>
@@ -148,6 +148,8 @@ export interface RocketSceneProps {
   solarHour?: number;
   /** Disable OrbitControls + CameraRig — the launch director drives the camera. */
   controlsEnabled?: boolean;
+  /** Volumetric exhaust smoke at pad level (launch mode). */
+  exhaustSmoke?: boolean;
 }
 
 export default function RocketScene({
@@ -163,6 +165,7 @@ export default function RocketScene({
   geo = true,
   solarHour,
   controlsEnabled = true,
+  exhaustSmoke = false,
 }: RocketSceneProps) {
   const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const geoActive = geo && HAS_MAPS_KEY && Boolean(site);
@@ -179,7 +182,7 @@ export default function RocketScene({
     >
       {geoActive && site ? (
         <Suspense fallback={null}>
-          <GeoEnvironment site={site} solarHour={solarHour} clouds={!reducedMotion}>
+          <GeoEnvironment site={site} solarHour={solarHour} clouds={!reducedMotion} exhaustSmoke={exhaustSmoke}>
             {showPad && <Launchpad site={site} towerRetracted={towerRetracted} ground={false} />}
             {children}
           </GeoEnvironment>
