@@ -26,16 +26,16 @@ export function Launchpad({ site, towerRetracted = false, ground = true }: { sit
         </mesh>
       )}
       {/* Concrete pad + blast deflector */}
-      <mesh position={[0, -0.75, 0]} receiveShadow>
+      <mesh position={[0, -0.05, 0]} receiveShadow>
         <cylinderGeometry args={[6, 6.5, 0.3, 32]} />
         <meshStandardMaterial color="#7d8497" roughness={0.9} />
       </mesh>
-      <mesh position={[0, -0.62, 0]} receiveShadow>
+      <mesh position={[0, 0.1, 0]} receiveShadow>
         <cylinderGeometry args={[2.2, 2.5, 0.25, 24]} />
         <meshStandardMaterial color="#4a5066" roughness={0.8} metalness={0.2} />
       </mesh>
       {/* Service tower — industrial lattice with cross-bracing */}
-      <group ref={towerRef} position={[3.8, -0.6, 0]}>
+      <group ref={towerRef} position={[3.8, 0, 0]}>
         {/* Four corner columns */}
         {[[-0.4, -0.4], [-0.4, 0.4], [0.4, -0.4], [0.4, 0.4]].map(([x, z], i) => (
           <mesh key={`col${i}`} position={[x, 5.5, z]} castShadow>
@@ -148,6 +148,8 @@ export interface RocketSceneProps {
   solarHour?: number;
   /** Disable OrbitControls + CameraRig — the launch director drives the camera. */
   controlsEnabled?: boolean;
+  /** Volumetric exhaust smoke at pad level (launch mode). */
+  exhaustSmoke?: boolean;
 }
 
 export default function RocketScene({
@@ -192,6 +194,7 @@ export default function RocketScene({
           <ambientLight intensity={0.45} />
           <hemisphereLight intensity={0.35} color="#bfd8ff" groundColor="#33405e" />
           <directionalLight position={[12, 18, 8]} intensity={2.2} castShadow shadow-mapSize={[1024, 1024]} />
+          <Environment preset="dawn" background={false} environmentIntensity={0.6} />
           <Suspense fallback={null}>
             {showPad && <Launchpad site={site} towerRetracted={towerRetracted} />}
             {children}
